@@ -1555,7 +1555,7 @@ export default function App() {
                 </div>
             </div>
 
-            <main className={`max-w-6xl mx-auto px-4 gap-4 mt-4 ${viewMode === 'list' ? 'flex flex-col' : (viewMode === 'table' ? 'flex flex-col bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden' : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4')}`}>
+            <main className={`max-w-6xl mx-auto px-4 gap-4 mt-4 ${viewMode === 'list' ? 'flex flex-col' : (viewMode === 'table' ? `flex flex-col ${theme.surface} rounded-3xl border ${theme.border} overflow-hidden` : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4')}`}>
                 {loading ? <div className={`col-span-full text-center py-20 ${theme.textMuted} font-bold uppercase text-[10px] tracking-widest animate-pulse`}>Scanning Cloud...</div> :
                     (viewMode === 'table' ? (
                         <div className="overflow-x-auto">
@@ -1602,17 +1602,17 @@ export default function App() {
                                                     <button className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-all opacity-40 hover:opacity-100">
                                                         <Settings2 size={14} />
                                                     </button>
-                                                    <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl p-3 z-20 hidden group-hover:block transition-all">
-                                                        <div className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2 px-1 text-left">Visible Columns</div>
+                                                    <div className={`absolute top-full right-0 mt-2 w-48 ${theme.surface} border ${theme.border} rounded-xl shadow-2xl p-3 z-20 hidden group-hover:block transition-all`}>
+                                                        <div className={`text-[9px] font-black uppercase tracking-widest ${theme.textMuted} mb-2 px-1 text-left`}>Visible Columns</div>
                                                         {['store', 'total', 'unitPrice', 'pro'].map(col => (
-                                                            <label key={col} className="flex items-center gap-3 px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer transition-colors w-full">
+                                                            <label key={col} className={`flex items-center gap-3 px-2 py-1.5 hover:${theme.inputBg} rounded-lg cursor-pointer transition-colors w-full`}>
                                                                 <input
                                                                     type="checkbox"
                                                                     checked={visibleColumns.includes(col)}
                                                                     onChange={() => setVisibleColumns(prev => prev.includes(col) ? prev.filter(c => c !== col) : [...prev, col])}
                                                                     className="w-3 h-3 rounded text-blue-600 focus:ring-blue-500"
                                                                 />
-                                                                <span className="text-[10px] font-bold uppercase text-slate-700 dark:text-slate-300 capitalize">{col === 'unitPrice' ? 'Unit Price' : col}</span>
+                                                                <span className={`text-[10px] font-bold uppercase ${theme.text} capitalize`}>{col === 'unitPrice' ? 'Unit Price' : col}</span>
                                                             </label>
                                                         ))}
                                                     </div>

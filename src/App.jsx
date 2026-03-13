@@ -5,7 +5,7 @@ import {
     Filter, ShoppingCart, Tag, ChevronDown, Trash2, Camera, Image as ImageIcon,
     CheckCircle2, RotateCcw, Layers, MessageSquare, Send, UserCog, List, RefreshCw, Sparkles,
     ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Loader2, Maximize2, Settings, Moon, Sun, Folder,
-    CheckSquare, LayoutGrid
+    CheckSquare, LayoutGrid, TableProperties, MoreVertical
 } from 'lucide-react';
 
 // --- Local Storage Database Mock (Firebase API Shim) ---
@@ -148,7 +148,8 @@ export default function App() {
     const [selectedStore, setSelectedStore] = useState('All Stores');
     const [selectedCategory, setSelectedCategory] = useState('All Categories');
     const [loading, setLoading] = useState(true);
-    const [compareIds, setCompareIds] = useState([]);
+    // const [compareIds, setCompareIds] = useState([]); // Removed in favor of selectedIds
+
 
     // --- Layout & View States ---
     const [viewMode, setViewMode] = useState(() => {
@@ -168,8 +169,7 @@ export default function App() {
         localStorage.setItem('nutripricer_showImages', showImages);
     }, [showImages]);
 
-    // --- Selection Mode States ---
-    const [isSelectionMode, setIsSelectionMode] = useState(false);
+    // --- Selection Mode States (Consolidated) ---
     const [selectedIds, setSelectedIds] = useState([]);
     const [categorizationQueue, setCategorizationQueue] = useState([]);
 
@@ -210,6 +210,10 @@ export default function App() {
     const [showApiSettings, setShowApiSettings] = useState(false);
     const [apiStatus, setApiStatus] = useState('idle');
     const [showChangelog, setShowChangelog] = useState(false);
+    const [isSearchVisible, setIsSearchVisible] = useState(false);
+    const [isFilterVisible, setIsFilterVisible] = useState(false);
+    const [showCompareView, setShowCompareView] = useState(false);
+    const [showBulkActionMenu, setShowBulkActionMenu] = useState(false);
 
     const fileInputRef = useRef(null);
     const cameraInputRef = useRef(null);
@@ -736,7 +740,6 @@ export default function App() {
             }).filter(item => item.name !== 'Unknown');
 
             setCategorizationQueue(proposedUpdates);
-            setIsSelectionMode(false);
             setSelectedIds([]);
         } else {
             setConfirmDialog({ isOpen: true, message: "Failed to categorize items. Try again.", hideCancel: true, onConfirm: () => setConfirmDialog({ isOpen: false }) });
@@ -772,7 +775,6 @@ export default function App() {
                 try {
                     const deletePromises = selectedIds.map(id => deleteDoc(doc(db, 'artifacts', PERSISTENT_APP_ID, 'users', user.uid, 'prices', id)));
                     await Promise.all(deletePromises);
-                    setIsSelectionMode(false);
                     setSelectedIds([]);
                 } catch (err) {
                     console.error("Failed to delete items:", err);
@@ -1039,7 +1041,7 @@ export default function App() {
     }, [entries, searchQuery, sortBy, displayMetric, activeTab, selectedStore, selectedCategory, calculateMetrics]);
 
     const toggleCompare = (id) => {
-        setCompareIds(prev =>
+        setSelectedIds(prev =>
             prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
         );
     };
@@ -1184,35 +1186,6 @@ export default function App() {
             )}
 
             {/* Floating Action Bar for Selection Mode */}
-            {isSelectionMode && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[45] animate-in slide-in-from-bottom-8 w-[95%] max-w-md">
-                    <div className={`${theme.surface} border ${theme.border} p-2 rounded-[2rem] shadow-2xl flex items-center gap-2 backdrop-blur-xl overflow-x-auto no-scrollbar`}>
-                        <button onClick={() => {
-                            if (selectedIds.length === filteredAndSortedEntries.length && filteredAndSortedEntries.length > 0) {
-                                setSelectedIds([]);
-                            } else {
-                                setSelectedIds(filteredAndSortedEntries.map(e => e.id));
-                            }
-                        }} className={`px-3 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-colors border shrink-0 ${selectedIds.length > 0 && selectedIds.length === filteredAndSortedEntries.length ? 'bg-blue-600 text-white border-blue-600 shadow-md' : theme.btnMuted}`}>
-                            <CheckSquare size={14} />
-                            <span className="hidden sm:inline">All</span>
-                        </button>
-                        <div className={`w-px h-6 ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'} shrink-0`} />
-                        <span className={`px-2 text-[10px] font-black uppercase tracking-widest ${theme.text} whitespace-nowrap shrink-0`}>{selectedIds.length} Sel</span>
-                        <div className="flex-1"></div>
-                        {selectedIds.length > 0 && (
-                            <>
-                                <button onClick={handleAutoCategorizeSelected} className="bg-blue-600 text-white px-3 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-colors shrink-0">
-                                    <Wand2 size={14} /> <span className="hidden sm:inline">Auto-Category</span><span className="sm:hidden">Cat</span>
-                                </button>
-                                <button onClick={handleDeleteSelected} className="bg-red-500 text-white px-3 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-lg shadow-red-500/20 hover:bg-red-600 transition-colors shrink-0">
-                                    <Trash2 size={14} /> <span className="hidden sm:inline">Delete</span>
-                                </button>
-                            </>
-                        )}
-                    </div>
-                </div>
-            )}
 
             {/* Fullscreen Image Viewer */}
             {fullscreenImage && (
@@ -1227,33 +1200,73 @@ export default function App() {
             <input type="file" accept=".json" ref={fileInputRef} onChange={handleRestore} className="hidden" />
             <input type="file" accept="image/*" multiple ref={galleryInputRef} onChange={handleBatchSelection} className="hidden" />
 
-            <header className={`sticky top-0 z-40 ${isDarkMode ? 'bg-slate-950/90' : 'bg-white/90'} backdrop-blur-xl border-b ${theme.border} p-3 md:p-4 transition-colors duration-300`}>
-                <div className="max-w-6xl mx-auto flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
+            {/* Consolidated Header */}
+            <header className={`sticky top-0 z-50 ${theme.surface} border-b ${theme.border} backdrop-blur-md bg-opacity-95`}>
+                <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-4 min-w-0">
                         <div className="flex flex-col truncate">
-                            <h1 className={`text-lg md:text-xl font-black tracking-tighter ${theme.text} flex items-center gap-1 uppercase truncate`}>
-                                <Activity className="text-blue-600 shrink-0" size={18} />
-                                <span className="truncate">Nutri<span className="text-blue-600">Pricer</span></span>
+                            <h1 className={`text-lg md:text-xl font-black tracking-tighter text-blue-600 flex items-center gap-1 uppercase truncate`}>
+                                <Activity size={18} />
+                                <span className="truncate">NUTRIPRICR</span>
                             </h1>
                             <div className="flex items-center gap-1.5 mt-0.5">
                                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${user ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500'}`} />
                                 <span className={`text-[8px] font-black uppercase ${theme.textMuted} tracking-widest truncate`}>{user ? 'Live' : 'Offline'}</span>
                             </div>
                         </div>
+
+                        <nav className="flex items-center gap-0.5 md:gap-1 ml-2 md:ml-4 py-1 px-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+                            <button
+                                onClick={() => { setActiveTab('food'); setDisplayMetric('unit'); }}
+                                className={`px-2 md:px-4 py-1.5 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all ${activeTab === 'food' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : theme.textMuted}`}
+                            >
+                                <span className="md:hidden">Food</span>
+                                <span className="hidden md:inline">Nutrition</span>
+                            </button>
+                            <button
+                                onClick={() => { setActiveTab('non-food'); setDisplayMetric('unit'); }}
+                                className={`px-2 md:px-4 py-1.5 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all ${activeTab === 'non-food' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : theme.textMuted}`}
+                            >
+                                <span className="md:hidden">Home</span>
+                                <span className="hidden md:inline">Household</span>
+                            </button>
+                        </nav>
                     </div>
-                    <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
-                        <button onClick={() => setIsChatOpen(true)} className={`p-2 md:p-2.5 ${theme.btnMuted} rounded-xl transition-all border`} title="Coach Chat"><MessageSquare size={16} className="md:w-[18px] md:h-[18px]" /></button>
-                        <button onClick={() => setShowSettingsMenu(true)} className={`p-2 md:p-2.5 ${theme.btnMuted} rounded-xl transition-all border`} title="Settings"><Settings size={16} className="md:w-[18px] md:h-[18px]" /></button>
-                        <button onClick={() => { setIsSelectionMode(!isSelectionMode); setSelectedIds([]); }} className={`p-2 md:p-2.5 ${isSelectionMode ? 'bg-blue-600 text-white border-blue-600 shadow-md' : theme.btnMuted} rounded-xl transition-all border`} title="Select Mode">
-                            <CheckSquare size={16} className="md:w-[18px] md:h-[18px]" />
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                        <button onClick={() => setIsSearchVisible(!isSearchVisible)} className={`p-2.5 rounded-full border ${theme.border} ${isSearchVisible ? 'bg-blue-600 text-white border-blue-600' : theme.surface + ' ' + theme.textMuted} transition-all`}>
+                            <Search size={18} />
+                        </button>
+                        <button onClick={() => setIsFilterVisible(!isFilterVisible)} className={`p-2.5 rounded-full border ${theme.border} ${isFilterVisible ? 'bg-blue-600 text-white border-blue-600' : theme.surface + ' ' + theme.textMuted} transition-all`}>
+                            <Filter size={18} />
+                        </button>
+                        <div className={`p-1 rounded-full border ${theme.border} ${theme.surface} flex items-center`}>
+                            <button
+                                onClick={() => {
+                                    const sequence = [1, 10, 100, 1000];
+                                    const next = sequence[(sequence.indexOf(granularity) + 1) % sequence.length];
+                                    setGranularity(next);
+                                }}
+                                className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-black uppercase bg-blue-600/10 text-blue-600"
+                            >
+                                {granularity === 1000 ? '1kg' : `${granularity}g`}
+                                <RefreshCw size={12} />
+                            </button>
+                        </div>
+                        <div className={`h-8 w-px ${theme.border} mx-1 hidden md:block`} />
+                        <button onClick={() => setIsChatOpen(true)} className={`p-2.5 rounded-xl border ${theme.border} ${theme.surface} ${theme.textMuted} hidden md:block transition-all hover:bg-blue-50 dark:hover:bg-blue-900/20`}>
+                            <MessageSquare size={18} />
+                        </button>
+                        <button onClick={() => setShowSettingsMenu(!showSettingsMenu)} className={`p-2.5 rounded-xl border ${theme.border} ${theme.surface} ${theme.textMuted} transition-all`}>
+                            <Settings size={18} />
                         </button>
                         <button onClick={() => {
                             setFormData(defaultForm);
                             setOldServingSize('100');
                             setViewingItem(null);
                             setIsDrawerOpen(true);
-                        }} className="bg-blue-600 text-white px-3 md:px-5 py-2 md:py-2.5 rounded-2xl shadow-lg shadow-blue-500/20 active:scale-95 transition-all flex items-center gap-1.5 font-bold text-xs md:text-sm ml-1">
-                            <Plus size={16} className="md:w-[18px] md:h-[18px]" /> <span className="hidden sm:inline">Add</span>
+                        }} className="bg-blue-600 text-white px-4 py-2.5 rounded-2xl shadow-lg shadow-blue-500/20 active:scale-95 transition-all flex items-center gap-1.5 font-bold text-xs ml-1">
+                            <Plus size={18} /> <span className="hidden sm:inline">Add</span>
                         </button>
                     </div>
                 </div>
@@ -1286,20 +1299,20 @@ export default function App() {
                 </div>
             )}
 
-            {/* Comparison Drawer */}
-            {compareIds.length > 0 && (
-                <div className="max-w-6xl mx-auto px-4 pt-4 animate-in slide-in-from-top duration-300">
-                    <div className={`${isDarkMode ? 'bg-blue-900/10 border border-blue-500/20 backdrop-blur-xl' : 'bg-slate-900 ring-1 ring-white/10'} rounded-[2.5rem] p-6 text-white shadow-2xl relative overflow-hidden md:max-w-2xl md:mx-auto`}>
-                        <div className="flex justify-between items-center mb-5">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-blue-400 flex items-center gap-2">
-                                <ArrowLeftRight size={14} /> Compare {compareIds.length} Items
-                            </span>
-                            <button onClick={() => setCompareIds([])} className="text-slate-500 hover:text-white p-1">
-                                <X size={18} />
-                            </button>
-                        </div>
-                        <div className={`grid gap-6 divide-x divide-white/10 overflow-x-auto`} style={{ gridTemplateColumns: `repeat(${compareIds.length}, minmax(140px, 1fr))` }}>
-                            {compareIds.map(id => {
+            {/* Comparison Fullscreen View */}
+            {showCompareView && selectedIds.length > 0 && (
+                <div className="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-xl flex flex-col p-6 animate-in fade-in duration-300">
+                    <div className="flex justify-between items-center mb-6">
+                        <span className="text-[12px] font-black uppercase tracking-widest text-blue-400 flex items-center gap-2">
+                            <ArrowLeftRight size={18} /> Comparison Matrix ({selectedIds.length})
+                        </span>
+                        <button onClick={() => setShowCompareView(false)} className="bg-white/10 hover:bg-white/20 text-white p-3 rounded-full transition-colors">
+                            <X size={24} />
+                        </button>
+                    </div>
+                    <div className="flex-1 overflow-x-auto no-scrollbar pb-10">
+                        <div className={`flex gap-6 divide-x divide-white/10 min-w-max h-full`}>
+                            {selectedIds.map(id => {
                                 const item = entries.find(e => e.id === id);
                                 if (!item) return null;
                                 const m = calculateMetrics(item);
@@ -1307,50 +1320,53 @@ export default function App() {
                                 const unitLabel = item.unit === 'ct' ? 'ct' : (granularity === 1000 ? (item.unit === 'ml' || item.unit === 'l' ? 'L' : 'kg') : (item.unit === 'ml' || item.unit === 'l' ? 'ml' : 'g'));
 
                                 return (
-                                    <div key={id} className="px-2 overflow-y-auto max-h-[40vh] no-scrollbar">
-                                        <div className={`text-[11px] font-black uppercase ${isDarkMode ? 'text-slate-200' : 'text-slate-300'} break-words whitespace-normal leading-tight mb-1 line-clamp-3`}>{item.name}</div>
-                                        <div className="text-[9px] font-bold text-emerald-400 mb-2 flex items-center gap-1 uppercase tracking-widest"><ShoppingCart size={10} /> {item.store || 'Market'}</div>
-                                        <div className="text-xl font-black text-white leading-tight mb-4">${m.normalized} <span className="block text-[10px] font-bold text-blue-500 opacity-80 uppercase">/{displayGranularity}{unitLabel}</span></div>
+                                    <div key={id} className="w-80 px-6 overflow-y-auto no-scrollbar">
+                                        <div className="aspect-square w-full rounded-2xl bg-white/5 border border-white/10 mb-6 overflow-hidden flex items-center justify-center">
+                                            {item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <Package size={48} className="text-white/20" />}
+                                        </div>
+                                        <div className={`text-[16px] font-black uppercase text-white leading-tight mb-2`}>{item.name}</div>
+                                        <div className="text-[10px] font-bold text-emerald-400 mb-4 flex items-center gap-1 uppercase tracking-widest"><ShoppingCart size={12} /> {item.store || 'Market'}</div>
+                                        <div className="text-3xl font-black text-white leading-tight mb-8">${m.normalized} <span className="text-[12px] font-bold text-blue-500 uppercase">/{displayGranularity}{unitLabel}</span></div>
                                         {!item.isNonFood && (
-                                            <div className="mt-4 space-y-2 border-t border-white/5 pt-3">
-                                                <div className="flex justify-between items-end text-[10px]">
+                                            <div className="space-y-4 border-t border-white/5 pt-6">
+                                                <div className="flex justify-between items-end border-b border-white/5 pb-2">
                                                     <div className="flex flex-col">
-                                                        <span className="text-slate-500 font-bold uppercase">PRO</span>
-                                                        <span className="text-[8px] text-blue-400/70 font-black">{m.proteinDensity}g/{displayGranularity}{unitLabel}</span>
+                                                        <span className="text-slate-500 font-bold uppercase text-[10px]">Protein</span>
+                                                        <span className="text-[12px] text-blue-400 font-black">{m.proteinDensity}g/{displayGranularity}{unitLabel}</span>
                                                     </div>
                                                     <div className="flex flex-col items-end">
-                                                        <span className="text-[8px] text-slate-500 uppercase font-black">Yield</span>
-                                                        <span className="font-bold text-[11px] text-white">{m.proteinYield || '--'}g / $1</span>
+                                                        <span className="text-[9px] text-slate-500 uppercase font-black">Yield</span>
+                                                        <span className="font-bold text-[14px] text-white">{m.proteinYield || '--'}g/$1</span>
                                                     </div>
                                                 </div>
-                                                <div className="flex justify-between items-end text-[10px]">
+                                                <div className="flex justify-between items-end border-b border-white/5 pb-2">
                                                     <div className="flex flex-col">
-                                                        <span className="text-slate-500 font-bold uppercase">CARB</span>
-                                                        <span className="text-[8px] text-blue-400/70 font-black">{m.carbsDensity}g/{displayGranularity}{unitLabel}</span>
+                                                        <span className="text-slate-500 font-bold uppercase text-[10px]">Carbs</span>
+                                                        <span className="text-[12px] text-blue-400 font-black">{m.carbsDensity}g/{displayGranularity}{unitLabel}</span>
                                                     </div>
                                                     <div className="flex flex-col items-end">
-                                                        <span className="text-[8px] text-slate-500 uppercase font-black">Yield</span>
-                                                        <span className="font-bold text-[11px] text-white">{m.carbsYield || '--'}g / $1</span>
+                                                        <span className="text-[9px] text-slate-500 uppercase font-black">Yield</span>
+                                                        <span className="font-bold text-[14px] text-white">{m.carbsYield || '--'}g/$1</span>
                                                     </div>
                                                 </div>
-                                                <div className="flex justify-between items-end text-[10px]">
+                                                <div className="flex justify-between items-end border-b border-white/5 pb-2">
                                                     <div className="flex flex-col">
-                                                        <span className="text-slate-500 font-bold uppercase">FAT</span>
-                                                        <span className="text-[8px] text-blue-400/70 font-black">{m.fatsDensity}g/{displayGranularity}{unitLabel}</span>
+                                                        <span className="text-slate-500 font-bold uppercase text-[10px]">Fats</span>
+                                                        <span className="text-[12px] text-blue-400 font-black">{m.fatsDensity}g/{displayGranularity}{unitLabel}</span>
                                                     </div>
                                                     <div className="flex flex-col items-end">
-                                                        <span className="text-[8px] text-slate-500 uppercase font-black">Yield</span>
-                                                        <span className="font-bold text-[11px] text-white">{m.fatsYield || '--'}g / $1</span>
+                                                        <span className="text-[9px] text-slate-500 uppercase font-black">Yield</span>
+                                                        <span className="font-bold text-[14px] text-white">{m.fatsYield || '--'}g/$1</span>
                                                     </div>
                                                 </div>
-                                                <div className="flex justify-between items-end text-[10px]">
+                                                <div className="flex justify-between items-end">
                                                     <div className="flex flex-col">
-                                                        <span className="text-slate-500 font-bold uppercase">CAL</span>
-                                                        <span className="text-[8px] text-blue-400/70 font-black">{m.caloriesDensity}/{displayGranularity}{unitLabel}</span>
+                                                        <span className="text-slate-500 font-bold uppercase text-[10px]">Calories</span>
+                                                        <span className="text-[12px] text-blue-400 font-black">{m.caloriesDensity}/{displayGranularity}{unitLabel}</span>
                                                     </div>
                                                     <div className="flex flex-col items-end">
-                                                        <span className="text-[8px] text-slate-500 uppercase font-black">Yield</span>
-                                                        <span className="font-bold text-[11px] text-orange-400">{m.caloriesYield || '--'} Cal / $1</span>
+                                                        <span className="text-[9px] text-slate-500 uppercase font-black">Yield</span>
+                                                        <span className="font-bold text-[14px] text-orange-400">{m.caloriesYield || '--'}Cal/$1</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1363,99 +1379,56 @@ export default function App() {
                 </div>
             )}
 
-            {/* View Controls */}
-            <div className={`sticky top-0 z-40 ${theme.bg} bg-opacity-90 backdrop-blur-md pb-2 pt-4 shadow-sm transition-all duration-300`}>
-            <div className="max-w-6xl mx-auto px-4 space-y-4">
-                <div className="flex flex-col md:flex-row gap-4">
-                    <div className={`flex p-1.5 rounded-[1.8rem] shadow-sm border ${theme.surface} ${theme.border} md:w-72 flex-shrink-0`}>
-                        <button
-                            onClick={() => { setActiveTab('food'); setDisplayMetric('unit'); }}
-                            className={`flex-1 py-3 rounded-3xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${activeTab === 'food' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : theme.textMuted}`}
-                        >
-                            <Beef size={16} /> Nutrition
-                        </button>
-                        <button
-                            onClick={() => { setActiveTab('non-food'); setDisplayMetric('unit'); }}
-                            className={`flex-1 py-3 rounded-3xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${activeTab === 'non-food' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : theme.textMuted}`}
-                        >
-                            <Package size={16} /> Household
-                        </button>
-                    </div>
-
-                    <div className="relative flex-1">
-                        <Search className={`absolute left-4 top-1/2 -translate-y-1/2 ${theme.textMuted}`} size={18} />
-                        <input type="text" placeholder={`Search ${activeTab === 'food' ? 'protein, dairy...' : 'cleaning, paper...'}`} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className={`w-full pl-11 pr-4 py-4 ${theme.surface} border ${theme.border} rounded-3xl focus:ring-4 focus:ring-blue-500/10 outline-none shadow-sm text-sm font-medium transition-all ${theme.text} ${isDarkMode ? 'placeholder-slate-500' : 'placeholder-slate-400'}`} />
-                    </div>
+            {/* Expandable Search & Filter Bar */}
+            <div className={`sticky top-16 z-40 ${theme.bg} bg-opacity-95 backdrop-blur-md overflow-hidden transition-all duration-300 ${isSearchVisible || isFilterVisible ? 'max-h-64 border-b ' + theme.border : 'max-h-0'}`}>
+                <div className="max-w-6xl mx-auto p-4 space-y-4">
+                    {isSearchVisible && (
+                        <div className="relative">
+                            <Search className={`absolute left-4 top-1/2 -translate-y-1/2 ${theme.textMuted}`} size={18} />
+                            <input
+                                autoFocus
+                                type="text"
+                                placeholder={`Search ${activeTab === 'food' ? 'protein, dairy...' : 'cleaning, paper...'}`}
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className={`w-full pl-11 pr-4 py-4 ${theme.surface} border ${theme.border} rounded-2xl outline-none text-sm font-medium transition-all ${theme.text}`}
+                            />
+                        </div>
+                    )}
+                    {isFilterVisible && (
+                        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar items-center">
+                            <div className="relative flex-shrink-0">
+                                <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className={`appearance-none ${theme.blueAccentBg} ${theme.blueAccentText} border pl-9 pr-8 py-2.5 rounded-xl text-[10px] font-black uppercase outline-none cursor-pointer max-w-[140px] truncate`}>
+                                    {uniqueCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                                <Folder className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500 pointer-events-none" size={14} />
+                            </div>
+                            <div className="relative flex-shrink-0">
+                                <select value={selectedStore} onChange={(e) => setSelectedStore(e.target.value)} className={`appearance-none ${theme.blueAccentBg} ${theme.blueAccentText} border pl-9 pr-8 py-2.5 rounded-xl text-[10px] font-black uppercase outline-none cursor-pointer`}>
+                                    {uniqueStores.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500 pointer-events-none" size={14} />
+                            </div>
+                            <div className="relative flex-shrink-0">
+                                <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={`appearance-none ${theme.blueAccentBg} ${theme.blueAccentText} border pl-9 pr-8 py-2.5 rounded-xl text-[10px] font-black uppercase outline-none cursor-pointer`}>
+                                    <option value="date">Newest</option>
+                                    <option value="roi">Best ROI</option>
+                                    <option value="price">Lowest $</option>
+                                </select>
+                                <List className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500 pointer-events-none" size={14} />
+                            </div>
+                        </div>
+                    )}
                 </div>
+            </div>
 
-                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar items-center">
-                    {/* Category Filter Dropdown */}
-                    <div className="relative flex-shrink-0">
-                        <select
-                            value={selectedCategory}
-                            onChange={(e) => setSelectedCategory(e.target.value)}
-                            className={`appearance-none ${theme.blueAccentBg} ${theme.blueAccentText} border pl-9 pr-8 py-2 rounded-xl text-[11px] font-black uppercase tracking-tight outline-none focus:ring-2 focus:ring-blue-500/30 cursor-pointer transition-all max-w-[140px] truncate`}
-                        >
-                            {uniqueCategories.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                        <Folder className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500 pointer-events-none" size={14} />
-                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-500 pointer-events-none" size={14} />
-                    </div>
-
-                    {/* Store Filter Dropdown */}
-                    <div className="relative flex-shrink-0">
-                        <select
-                            value={selectedStore}
-                            onChange={(e) => setSelectedStore(e.target.value)}
-                            className={`appearance-none ${theme.blueAccentBg} ${theme.blueAccentText} border pl-9 pr-8 py-2 rounded-xl text-[11px] font-black uppercase tracking-tight outline-none focus:ring-2 focus:ring-blue-500/30 cursor-pointer transition-all`}
-                        >
-                            {uniqueStores.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                        <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500 pointer-events-none" size={14} />
-                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-500 pointer-events-none" size={14} />
-                    </div>
-
-                    <div className={`h-6 w-px ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'} mx-1 flex-shrink-0`} />
-
-                    {/* Sorting Dropdown */}
-                    <div className="relative flex-shrink-0">
-                        <select
-                            value={sortBy}
-                            onChange={(e) => setSortBy(e.target.value)}
-                            className={`appearance-none ${theme.blueAccentBg} ${theme.blueAccentText} border pl-9 pr-8 py-2 rounded-xl text-[11px] font-black uppercase tracking-tight outline-none focus:ring-2 focus:ring-blue-500/30 cursor-pointer transition-all`}
-                        >
-                            <option value="date">Newest First</option>
-                            <option value="roi">Best ROI (Selected Metric)</option>
-                            <option value="price">Lowest Unit $</option>
-                        </select>
-                        <List className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500 pointer-events-none" size={14} />
-                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-500 pointer-events-none" size={14} />
-                    </div>
-
-                    <div className={`h-6 w-px ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'} mx-1 flex-shrink-0`} />
-
-                    {/* Granularity Picker */}
-                    <div className={`flex items-center gap-1.5 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'} p-1 rounded-xl flex-shrink-0`}>
-                        {[1, 10, 100, 1000].map(g => (
-                            <button key={g} onClick={() => setGranularity(g)} className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all ${granularity === g ? (isDarkMode ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-slate-900 shadow-sm') : theme.textMuted}`}>
-                                {g === 1000 ? '1k' : g}
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className={`h-6 w-px ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'} mx-1 flex-shrink-0`} />
-
-                    {/* Macro View Picker */}
-                    {activeTab === 'non-food' && [
+            <div className={`sticky top-[calc(4rem+1px)] z-30 ${theme.bg} bg-opacity-90 backdrop-blur-md py-3 border-b ${theme.border}`}>
+                <div className="max-w-6xl mx-auto px-4 flex gap-2 overflow-x-auto no-scrollbar">
+                    {(activeTab === 'non-food' ? [
                         { id: 'unit', label: 'Unit', icon: <Scale size={12} /> },
                         { id: 'kg', label: 'Per kg', icon: <Scale size={12} /> },
                         { id: 'lb', label: 'Per lb', icon: <Scale size={12} /> }
-                    ].map(btn => (
-                        <button key={btn.id} onClick={() => setDisplayMetric(btn.id)} className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-all flex-shrink-0 border ${displayMetric === btn.id ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20' : `${theme.surface} ${theme.textMuted} ${theme.border}`}`}>
-                            {btn.icon} {btn.label}
-                        </button>
-                    ))}
-                    {activeTab === 'food' && [
+                    ] : [
                         { id: 'unit', label: 'Unit', icon: <Scale size={12} /> },
                         { id: 'kg', label: 'Per kg', icon: <Scale size={12} /> },
                         { id: 'lb', label: 'Per lb', icon: <Scale size={12} /> },
@@ -1463,132 +1436,244 @@ export default function App() {
                         { id: 'fats', label: 'Fat', icon: <Droplets size={12} /> },
                         { id: 'carbs', label: 'Carb', icon: <PieChart size={12} /> },
                         { id: 'calories', label: 'Cal', icon: <Flame size={12} /> },
-                    ].map(btn => (
-                        <button key={btn.id} onClick={() => setDisplayMetric(btn.id)} className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-all flex-shrink-0 border ${displayMetric === btn.id ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20' : `${theme.surface} ${theme.textMuted} ${theme.border}`}`}>
+                    ]).map(btn => (
+                        <button key={btn.id} onClick={() => setDisplayMetric(btn.id)} className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-full text-[10px] font-black uppercase transition-all flex-shrink-0 border ${displayMetric === btn.id ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20' : `${theme.surface} ${theme.textMuted} ${theme.border}`}`}>
                             {btn.icon} {btn.label}
                         </button>
                     ))}
-                    
-                    <div className={`h-6 w-px ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'} mx-1 flex-shrink-0`} />
-                    
-                    {/* View Options */}
-                    <button onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')} className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-all flex-shrink-0 border ${theme.surface} ${theme.textMuted} ${theme.border} hover:bg-slate-200 dark:hover:bg-slate-700`}>
-                        {viewMode === 'grid' ? <List size={12} /> : <LayoutGrid size={12} />} {viewMode === 'grid' ? 'List' : 'Grid'}
-                    </button>
-                    <button onClick={() => setShowImages(!showImages)} className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-all flex-shrink-0 border ${theme.surface} ${theme.textMuted} ${theme.border} hover:bg-slate-200 dark:hover:bg-slate-700`}>
-                        <ImageIcon size={12} className={!showImages ? 'opacity-50' : ''} /> {showImages ? 'Img On' : 'Img Off'}
+                    <div className="flex-1" />
+                    <button
+                        onClick={() => {
+                            const modes = ['grid', 'list', 'table'];
+                            const next = modes[(modes.indexOf(viewMode) + 1) % modes.length];
+                            setViewMode(next);
+                        }}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-[10px] font-black uppercase border shadow-sm transition-all ${theme.surface} ${theme.textMuted} ${theme.border} active:scale-95 hover:bg-blue-50 dark:hover:bg-slate-800`}
+                    >
+                        {viewMode === 'grid' && <LayoutGrid size={14} />}
+                        {viewMode === 'list' && <List size={14} />}
+                        {viewMode === 'table' && <TableProperties size={14} />}
+                        <span className="min-w-[40px]">{viewMode}</span>
                     </button>
                 </div>
             </div>
-            </div>
 
-            <main className={`max-w-6xl mx-auto px-4 gap-4 mt-4 ${viewMode === 'list' ? 'flex flex-col' : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}`}>
+            <main className={`max-w-6xl mx-auto px-4 gap-4 mt-4 ${viewMode === 'list' ? 'flex flex-col' : (viewMode === 'table' ? 'flex flex-col bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden' : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4')}`}>
                 {loading ? <div className={`col-span-full text-center py-20 ${theme.textMuted} font-bold uppercase text-[10px] tracking-widest animate-pulse`}>Scanning Cloud...</div> :
-                    filteredAndSortedEntries.map(entry => {
-                        const m = calculateMetrics(entry);
-                        const isComparing = compareIds.includes(entry.id);
-                        const isSelected = isSelectionMode && selectedIds.includes(entry.id);
-                        const displayGranularity = granularity === 1000 ? 1 : granularity;
-                        const unitLabel = entry.unit === 'ct' ? 'ct' : (granularity === 1000 ? (entry.unit === 'ml' || entry.unit === 'l' ? 'L' : 'kg') : (entry.unit === 'ml' || entry.unit === 'l' ? 'ml' : 'g'));
+                    (viewMode === 'table' ? (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-sm border-collapse">
+                                <thead>
+                                    <tr className={`border-b ${theme.border} ${theme.surface} text-[10px] font-black uppercase tracking-widest ${theme.textMuted}`}>
+                                        <th className="px-6 py-4">Item</th>
+                                        <th className="px-4 py-4">Store</th>
+                                        <th className="px-4 py-4">Total</th>
+                                        <th className="px-4 py-4 text-blue-600">Unit $</th>
+                                        {activeTab !== 'non-food' && <th className="px-4 py-4 text-orange-500 font-black">Pro</th>}
+                                        <th className="px-4 py-4 text-right pr-6">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredAndSortedEntries.map(entry => {
+                                        const m = calculateMetrics(entry);
+                                        const displayGranularity = granularity === 1000 ? 1 : granularity;
+                                        const unitLabel = entry.unit === 'ct' ? 'ct' : (granularity === 1000 ? (entry.unit === 'ml' || entry.unit === 'l' ? 'L' : 'kg') : (entry.unit === 'ml' || entry.unit === 'l' ? 'ml' : 'g'));
+                                        const isSelected = selectedIds.includes(entry.id);
+                                        const isComparing = selectedIds.includes(entry.id);                            return (
+                                    <tr key={entry.id} className={`border-b ${theme.border} hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group cursor-pointer`} onClick={() => {
+                                        setViewingItem(entry);
+                                        setFormData(entry);
+                                        setIsDrawerOpen(true);
+                                    }}>
+                                                <td className="px-6 py-4 font-bold flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 shrink-0 overflow-hidden flex items-center justify-center">
+                                                        {entry.image ? <img src={entry.image} className="w-full h-full object-cover" /> : <Package size={14} className={theme.textMuted} />}
+                                                    </div>
+                                                    <span className="truncate max-w-[120px] md:max-w-[200px]">{entry.name}</span>
+                                                </td>
+                                                <td className="px-4 py-4 text-[10px] font-black uppercase opacity-60">{entry.store || 'Market'}</td>
+                                                <td className="px-4 py-4 font-black">${parseFloat(entry.price).toFixed(2)}</td>
+                                                <td className="px-4 py-4 md:whitespace-nowrap">
+                                                    <span className={`px-2 py-1 rounded-lg font-black text-[11px] ${displayMetric === 'unit' ? 'bg-blue-600/10 text-blue-600' : 'bg-orange-500/10 text-orange-500'}`}>
+                                                        {(() => {
+                                                            if (!entry.isNonFood && displayMetric !== 'unit' && displayMetric !== 'kg' && displayMetric !== 'lb') {
+                                                                if (displayMetric === 'calories') return `${m[`${displayMetric}Yield`] || '--'} CAL/$1`;
+                                                                return `${m[`${displayMetric}Yield`] || '--'}g ${displayMetric.substring(0, 3).toUpperCase()}/$1`;
+                                                            } else if (displayMetric === 'kg') return `$${m.pricePerKg || '--'}/kg`;
+                                                            else if (displayMetric === 'lb') return `$${m.pricePerLb || '--'}/lb`;
+                                                            return `$${m.normalized}/${displayGranularity}${unitLabel}`;
+                                                        })()}
+                                                    </span>
+                                                </td>
+                                                {activeTab !== 'non-food' && (
+                                                    <td className="px-4 py-4 text-[11px] font-bold text-orange-500">
+                                                        {m.proteinYield || '--'}g/$1
+                                                    </td>
+                                                )}
+                                                <td className="px-4 py-4 text-right pr-6">
+                                                    <button onClick={(e) => { e.stopPropagation(); toggleCompare(entry.id); }} className={`p-2 rounded-lg transition-colors ${isComparing ? 'bg-blue-600 text-white' : 'hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400'}`}>
+                                                        <ArrowLeftRight size={14} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : (
+                        filteredAndSortedEntries.map(entry => {
+                            const m = calculateMetrics(entry);
+                            const isComparing = selectedIds.includes(entry.id);
+                            const isSelected = selectedIds.includes(entry.id);
+                            const displayGranularity = granularity === 1000 ? 1 : granularity;
+                            const unitLabel = entry.unit === 'ct' ? 'ct' : (granularity === 1000 ? (entry.unit === 'ml' || entry.unit === 'l' ? 'L' : 'kg') : (entry.unit === 'ml' || entry.unit === 'l' ? 'ml' : 'g'));
 
-                        let badgeText = `$${m.normalized}/${displayGranularity}${unitLabel}`;
+                            let badgeText = `$${m.normalized}/${displayGranularity}${unitLabel}`;
 
-                        if (!entry.isNonFood && displayMetric !== 'unit' && displayMetric !== 'kg' && displayMetric !== 'lb') {
-                            if (displayMetric === 'calories') {
-                                badgeText = `${m[`${displayMetric}Yield`] || 'N/A'} CAL / $1`;
-                            } else {
-                                badgeText = `${m[`${displayMetric}Yield`] || 'N/A'}g ${displayMetric.substring(0, 3).toUpperCase()} / $1`;
+                            if (!entry.isNonFood && displayMetric !== 'unit' && displayMetric !== 'kg' && displayMetric !== 'lb') {
+                                if (displayMetric === 'calories') {
+                                    badgeText = `${m[`${displayMetric}Yield`] || 'N/A'} CAL / $1`;
+                                } else {
+                                    badgeText = `${m[`${displayMetric}Yield`] || 'N/A'}g ${displayMetric.substring(0, 3).toUpperCase()} / $1`;
+                                }
+                            } else if (displayMetric === 'kg') {
+                                badgeText = m.pricePerKg ? `$${m.pricePerKg} / kg` : 'N/A';
+                            } else if (displayMetric === 'lb') {
+                                badgeText = m.pricePerLb ? `$${m.pricePerLb} / lb` : 'N/A';
                             }
-                        } else if (displayMetric === 'kg') {
-                            badgeText = m.pricePerKg ? `$${m.pricePerKg} / kg` : 'N/A';
-                        } else if (displayMetric === 'lb') {
-                            badgeText = m.pricePerLb ? `$${m.pricePerLb} / lb` : 'N/A';
-                        }
 
-                        return (
-                            <div key={entry.id} className={`group ${theme.surface} p-5 rounded-[2.2rem] border transition-all relative overflow-hidden flex gap-4 items-center ${isComparing || isSelected ? 'border-blue-500 ring-4 ring-blue-500/20' : `${theme.border} shadow-sm ${theme.cardHover} active:scale-[0.98] cursor-pointer`}`}>
-
-                                {/* Selection Mode Overlay Checkbox */}
-                                {isSelectionMode && (
-                                    <div className="absolute top-3 right-3 z-10 pointer-events-none">
-                                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-slate-300 dark:border-slate-600'}`}>
-                                            {isSelected && <CheckCircle2 size={14} className="text-white" />}
+                            return (
+                                <div key={entry.id} className={`group ${theme.surface} p-4 rounded-[1.8rem] border transition-all relative overflow-hidden flex gap-4 items-center ${isComparing || isSelected ? 'border-blue-500 ring-4 ring-blue-500/20' : `${theme.border} shadow-sm ${theme.cardHover} active:scale-[0.98] cursor-pointer`}`}>
+                                    {/* Image Section */}
+                                    <div className="relative shrink-0">
+                                        <div
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                toggleCompare(entry.id);
+                                            }}
+                                            className={`${showImages ? 'w-24 h-24' : 'w-10 h-10'} rounded-2xl flex items-center justify-center transition-all overflow-hidden ${isComparing || isSelected ? 'bg-blue-600 text-white' : `${theme.inputBg} ${theme.textMuted} border ${theme.border} ${isDarkMode ? 'hover:bg-slate-700 hover:text-blue-400' : 'hover:bg-blue-50 hover:text-blue-500'}`}`}
+                                        >
+                                            {showImages ? (
+                                                entry.image ? <img src={entry.image} className="w-full h-full object-cover" /> : (entry.isNonFood ? <Hash size={32} /> : (Object.keys(MEAT_DATABASE).some(k => entry.name.toLowerCase().includes(k)) ? <Beef size={32} /> : <Package size={32} />))
+                                            ) : (
+                                                <ArrowLeftRight size={16} />
+                                            )}
                                         </div>
+                                        {showImages && (
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); toggleCompare(entry.id); }}
+                                                className={`absolute -bottom-2 -right-2 p-2 rounded-full shadow-lg border-2 z-10 transition-all ${isComparing ? 'bg-blue-600 text-white border-white dark:border-slate-900' : 'bg-white dark:bg-slate-800 text-blue-600 border-white dark:border-slate-900 hover:scale-110'}`}
+                                            >
+                                                <ArrowLeftRight size={16} />
+                                            </button>
+                                        )}
                                     </div>
-                                )}
 
-                                <div
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (isSelectionMode) {
-                                            setSelectedIds(prev => prev.includes(entry.id) ? prev.filter(id => id !== entry.id) : [...prev, entry.id]);
-                                        } else {
-                                            toggleCompare(entry.id);
-                                        }
-                                    }}
-                                    className={`${showImages ? 'w-14 h-14' : 'w-10 h-10'} rounded-[1.2rem] flex items-center justify-center flex-shrink-0 transition-all overflow-hidden ${isComparing || isSelected ? 'bg-blue-600 text-white' : `${theme.inputBg} ${theme.textMuted} border ${theme.border} ${isDarkMode ? 'hover:bg-slate-700 hover:text-blue-400' : 'hover:bg-blue-50 hover:text-blue-500'}`}`}
-                                >
-                                    {isComparing || isSelected ? <ArrowLeftRight size={showImages ? 22 : 16} /> : (showImages ? (entry.image ? <img src={entry.image} className="w-full h-full object-cover" /> : (entry.isNonFood ? <Hash size={22} /> : (Object.keys(MEAT_DATABASE).some(k => entry.name.toLowerCase().includes(k)) ? <Beef size={22} /> : <Package size={22} />))) : <ArrowLeftRight size={16} />)}
-                                </div>
-
-                                <div className="flex-1 min-w-0" onClick={() => {
-                                    if (isSelectionMode) {
-                                        setSelectedIds(prev => prev.includes(entry.id) ? prev.filter(id => id !== entry.id) : [...prev, entry.id]);
-                                    } else {
+                                    {/* Content Section */}
+                                    <div className="flex-1 min-w-0" onClick={() => {
                                         setViewingItem(entry);
                                         setFormData(entry);
                                         setOldServingSize(entry.servingSize || '100');
                                         setMacroContext('editor');
                                         setIsDrawerOpen(true);
-                                    }
-                                }}>
-                                    <div className="flex justify-between items-start mb-0.5 gap-3">
-                                        <div className="flex items-start gap-1.5 min-w-0 flex-1">
-                                            {entry.isSale && <Tag size={14} className="text-red-500 shrink-0 mt-[2px]" fill="currentColor" />}
-                                            <h3 className={`text-[15px] font-black leading-tight ${theme.text} line-clamp-2 md:whitespace-normal break-words`}>
-                                                {entry.name}
-                                            </h3>
+                                    }}>
+                                        <h3 className={`text-[13px] font-black uppercase leading-tight ${theme.text} mb-1 line-clamp-2`}>
+                                            {entry.name}
+                                        </h3>
+                                        <div className={`text-[10px] font-bold ${theme.textMuted} uppercase tracking-tight flex items-center gap-1.5`}>
+                                            <span>{entry.store || 'Market'}</span>
+                                            <span className="opacity-50">•</span>
+                                            <span>{entry.weight}{entry.unit}</span>
                                         </div>
-                                        <div className="flex flex-col items-end shrink-0">
-                                            <div className={`font-black ${theme.text} text-[14px] flex items-center gap-1`}>
-                                                ${parseFloat(entry.price).toFixed(2)}
-                                            </div>
-                                            {entry.isSale && entry.originalPrice && parseFloat(entry.originalPrice) > parseFloat(entry.price) && (
-                                                <div className="flex items-center gap-1.5 mt-0.5">
-                                                    <span className={`text-[10px] font-bold ${theme.textMuted} line-through`}>${parseFloat(entry.originalPrice).toFixed(2)}</span>
-                                                    <span className="text-[9px] font-black text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded">-{Math.round(((parseFloat(entry.originalPrice) - parseFloat(entry.price)) / parseFloat(entry.originalPrice)) * 100)}%</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
 
-                                    <div className="flex justify-between items-end mt-1 gap-2">
-                                        <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                                            <span className={`text-[11px] font-black ${theme.text} uppercase flex items-center gap-1.5 line-clamp-2 md:whitespace-normal break-words`}>
-                                                <ShoppingCart size={11} className="text-blue-500 shrink-0" />
-                                                <span>{entry.store || 'Market'}</span>
-                                                <span className={theme.textMuted}>•</span>
-                                                <span className={`${theme.textMuted} text-[9px]`}>{entry.category || 'Other'}</span>
-                                            </span>
-                                            <span className={`text-[10px] font-bold ${theme.textMuted} uppercase tracking-tight`}>
-                                                {entry.quantity > 1 ? `${entry.quantity}× ` : ''}{entry.weight}{entry.unit}
-                                            </span>
-                                        </div>
-                                        <div className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase shadow-md transition-all shrink-0 ${entry.isSale ? 'bg-red-500 text-white shadow-red-500/20' : 'bg-blue-600 text-white shadow-blue-500/20'}`}>
-                                            {badgeText}
+                                        <div className="flex justify-between items-center mt-3">
+                                            <div className="flex flex-col">
+                                                <span className={`text-[18px] font-black ${theme.text}`}>${parseFloat(entry.price).toFixed(2)}</span>
+                                                {entry.isSale && entry.originalPrice && parseFloat(entry.originalPrice) > parseFloat(entry.price) && (
+                                                    <div className="flex items-center gap-1">
+                                                        <span className={`text-[10px] font-bold ${theme.textMuted} line-through`}>${parseFloat(entry.originalPrice).toFixed(2)}</span>
+                                                        <span className="text-[9px] font-black text-red-500">-{Math.round(((parseFloat(entry.originalPrice) - parseFloat(entry.price)) / parseFloat(entry.originalPrice)) * 100)}%</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className={`px-4 py-2 rounded-2xl text-[12px] font-black shadow-lg transition-all ${entry.isSale ? 'bg-red-500 text-white' : (displayMetric === 'unit' ? 'bg-blue-600 text-white' : 'bg-orange-500 text-white')}`}>
+                                                {(() => {
+                                                    if (!entry.isNonFood && displayMetric !== 'unit' && displayMetric !== 'kg' && displayMetric !== 'lb') {
+                                                        if (displayMetric === 'calories') return `${m[`${displayMetric}Yield`] || 'N/A'} CAL/$1`;
+                                                        return `${m[`${displayMetric}Yield`] || 'N/A'}g ${displayMetric.substring(0, 3).toUpperCase()}/$1`;
+                                                    } else if (displayMetric === 'kg') return `$${m.pricePerKg || 'N/A'}/kg`;
+                                                    else if (displayMetric === 'lb') return `$${m.pricePerLb || 'N/A'}/lb`;
+                                                    return `$${m.normalized}/${displayGranularity}${unitLabel}`;
+                                                })()}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        );
-                    })
-                }
+                            );
+                        })
+                    ))}
                 {!loading && filteredAndSortedEntries.length === 0 && (
                     <div className="col-span-full py-20 text-center space-y-3">
                         <div className={`w-16 h-16 ${theme.inputBg} rounded-full flex items-center justify-center mx-auto ${theme.textMuted}`}>
                             <Search size={32} />
                         </div>
                         <p className={`text-[10px] font-black uppercase tracking-widest ${theme.textMuted}`}>No matching entries</p>
+                    </div>
+                )}
+
+                {/* Unified Floating Action Bar */}
+                {selectedIds.length > 0 && (
+                    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[80] w-[90%] max-w-md animate-in slide-in-from-bottom duration-500">
+                        <div className="bg-slate-900/90 backdrop-blur-2xl ring-1 ring-white/20 rounded-3xl p-3 shadow-2xl flex items-center justify-between text-white">
+                            <div className="flex items-center gap-3 pl-3">
+                                <div className="bg-blue-600 text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center">
+                                    {selectedIds.length}
+                                </div>
+                                <span className="text-[10px] font-black uppercase tracking-wider text-slate-300">Selected</span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setShowCompareView(true)}
+                                    className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-tight transition-all flex items-center gap-2 shadow-lg shadow-blue-500/20"
+                                >
+                                    <ArrowLeftRight size={14} /> Compare
+                                </button>
+                                
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setShowBulkActionMenu(!showBulkActionMenu)}
+                                        className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-2xl transition-all"
+                                    >
+                                        <MoreVertical size={18} />
+                                    </button>
+
+                                    {showBulkActionMenu && (
+                                        <div className="absolute bottom-full right-0 mb-4 w-48 bg-slate-800 border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200">
+                                            <button
+                                                onClick={() => { setShowBulkActionMenu(false); handleAutoCategorizeSelected(); }}
+                                                className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-black uppercase text-slate-300 hover:bg-white/5 transition-colors border-b border-white/5"
+                                            >
+                                                <Sparkles size={14} className="text-purple-400" /> Auto-Categorize
+                                            </button>
+                                            <button
+                                                onClick={() => { setShowBulkActionMenu(false); handleDeleteSelected(); }}
+                                                className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-black uppercase text-red-400 hover:bg-red-500/10 transition-colors"
+                                            >
+                                                <Trash2 size={14} /> Delete Selected
+                                            </button>
+                                            <button
+                                                onClick={() => { setSelectedIds([]); setShowBulkActionMenu(false); }}
+                                                className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-black uppercase text-slate-500 hover:bg-white/5 transition-colors border-t border-white/5"
+                                            >
+                                                <X size={14} /> Clear Selection
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
             </main>
@@ -2157,6 +2242,7 @@ export default function App() {
                     <span className={`text-[10px] font-black ${theme.textMuted} uppercase`}>AI Processing</span>
                 </div>
             )}
+
         </div>
     );
 }

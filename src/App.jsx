@@ -1239,17 +1239,17 @@ export default function App() {
                             </div>
                         </div>
 
-                        <nav className="flex items-center gap-0.5 md:gap-1 ml-2 md:ml-4 py-1 px-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+                        <nav className="flex items-center gap-0.5 ml-2 md:ml-4 py-1 px-1 bg-slate-100 dark:bg-slate-800 rounded-xl shrink-0">
                             <button
                                 onClick={() => { setActiveTab('food'); setDisplayMetric('unit'); }}
-                                className={`px-2 md:px-4 py-1.5 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all ${activeTab === 'food' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : theme.textMuted}`}
+                                className={`px-2 md:px-4 py-1.5 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${activeTab === 'food' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : theme.textMuted}`}
                             >
                                 <span className="md:hidden">Food</span>
                                 <span className="hidden md:inline">Nutrition</span>
                             </button>
                             <button
                                 onClick={() => { setActiveTab('non-food'); setDisplayMetric('unit'); }}
-                                className={`px-2 md:px-4 py-1.5 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all ${activeTab === 'non-food' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : theme.textMuted}`}
+                                className={`px-2 md:px-4 py-1.5 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${activeTab === 'non-food' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : theme.textMuted}`}
                             >
                                 <span className="md:hidden">Home</span>
                                 <span className="hidden md:inline">Household</span>
@@ -2309,9 +2309,14 @@ export default function App() {
             {showApiSettings && (
                 <div className="fixed inset-0 z-[90] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in">
                     <div className={`${theme.surface} w-full max-w-md rounded-[3rem] p-8 shadow-2xl border ${theme.border}`}>
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className={`w-10 h-10 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-900'} rounded-2xl flex items-center justify-center text-white`}><Zap size={20} /></div>
-                            <h3 className={`text-xl font-black uppercase tracking-tighter flex-1 ${theme.text}`}>Gemini API Key</h3>
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-900'} rounded-2xl flex items-center justify-center text-white`}><Zap size={20} /></div>
+                                <h3 className={`text-xl font-black uppercase tracking-tighter ${theme.text}`}>Gemini API Key</h3>
+                            </div>
+                            <button onClick={() => setShowApiSettings(false)} className={`${theme.btnMuted} border p-2.5 rounded-full transition-all hover:rotate-90`}>
+                                <X size={18} />
+                            </button>
                         </div>
                         <div className={`flex items-center justify-between mb-4 p-4 rounded-2xl border ${isDarkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                             <span className={`text-[11px] font-black uppercase tracking-widest ${theme.textMuted}`}>Connection Status</span>

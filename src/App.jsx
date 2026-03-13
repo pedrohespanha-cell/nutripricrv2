@@ -5,7 +5,7 @@ import {
     Filter, ShoppingCart, Tag, ChevronDown, Trash2, Camera, Image as ImageIcon,
     CheckCircle2, RotateCcw, Layers, MessageSquare, Send, UserCog, List, RefreshCw, Sparkles,
     ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Loader2, Maximize2, Settings, Moon, Sun, Folder,
-    CheckSquare, LayoutGrid, TableProperties, MoreVertical
+    CheckSquare, LayoutGrid, TableProperties, MoreVertical, Settings2, ChevronUp
 } from 'lucide-react';
 
 // --- Local Storage Database Mock (Firebase API Shim) ---
@@ -214,6 +214,10 @@ export default function App() {
     const [isFilterVisible, setIsFilterVisible] = useState(false);
     const [showCompareView, setShowCompareView] = useState(false);
     const [showBulkActionMenu, setShowBulkActionMenu] = useState(false);
+    const [showDetailView, setShowDetailView] = useState(false);
+    const [selectedDetailItem, setSelectedDetailItem] = useState(null);
+    const [tableSort, setTableSort] = useState({ key: 'date', direction: 'desc' });
+    const [visibleColumns, setVisibleColumns] = useState(['name', 'store', 'total', 'unitPrice', 'pro']);
 
     const fileInputRef = useRef(null);
     const cameraInputRef = useRef(null);
@@ -1024,6 +1028,26 @@ export default function App() {
             const ma = calculateMetrics(a);
             const mb = calculateMetrics(b);
 
+            // Table Sorting Override
+            if (viewMode === 'table') {
+                const { key, direction } = tableSort;
+                let valA, valB;
+
+                switch (key) {
+                    case 'name': valA = a.name; valB = b.name; break;
+                    case 'store': valA = a.store || 'Market'; valB = b.store || 'Market'; break;
+                    case 'total': valA = parseFloat(a.price); valB = parseFloat(b.price); break;
+                    case 'unitPrice': valA = parseFloat(ma.normalized); valB = parseFloat(mb.normalized); break;
+                    case 'pro': valA = parseFloat(ma.proteinYield) || 0; valB = parseFloat(mb.proteinYield) || 0; break;
+                    case 'date': valA = a.createdAt?.seconds || 0; valB = b.createdAt?.seconds || 0; break;
+                    default: valA = 0; valB = 0;
+                }
+
+                if (valA < valB) return direction === 'asc' ? -1 : 1;
+                if (valA > valB) return direction === 'asc' ? 1 : -1;
+                return 0;
+            }
+
             if (sortBy === 'roi') {
                 if (displayMetric === 'unit') {
                     return parseFloat(ma.normalized) - parseFloat(mb.normalized);
@@ -1038,7 +1062,7 @@ export default function App() {
             return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
         });
         return result;
-    }, [entries, searchQuery, sortBy, displayMetric, activeTab, selectedStore, selectedCategory, calculateMetrics]);
+    }, [entries, searchQuery, sortBy, displayMetric, activeTab, selectedStore, selectedCategory, calculateMetrics, viewMode, tableSort]);
 
     const toggleCompare = (id) => {
         setSelectedIds(prev =>
@@ -1324,7 +1348,9 @@ export default function App() {
                                         <div className="aspect-square w-full rounded-2xl bg-white/5 border border-white/10 mb-6 overflow-hidden flex items-center justify-center">
                                             {item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <Package size={48} className="text-white/20" />}
                                         </div>
-                                        <div className={`text-[16px] font-black uppercase text-white leading-tight mb-2`}>{item.name}</div>
+                                        <div className="h-16 flex flex-col justify-center mb-2">
+                                            <div className={`text-[15px] font-black uppercase text-white leading-tight line-clamp-2`}>{item.name}</div>
+                                        </div>
                                         <div className="text-[10px] font-bold text-emerald-400 mb-4 flex items-center gap-1 uppercase tracking-widest"><ShoppingCart size={12} /> {item.store || 'Market'}</div>
                                         <div className="text-3xl font-black text-white leading-tight mb-8">${m.normalized} <span className="text-[12px] font-bold text-blue-500 uppercase">/{displayGranularity}{unitLabel}</span></div>
                                         {!item.isNonFood && (
@@ -1374,6 +1400,77 @@ export default function App() {
                                     </div>
                                 )
                             })}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Detail View Modal */}
+            {showDetailView && selectedDetailItem && (
+                <div className="fixed inset-0 z-[110] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300" onClick={() => setShowDetailView(false)}>
+                    <div className={`relative ${theme.surface} w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-400 border ${theme.border}`} onClick={e => e.stopPropagation()}>
+                        <div className="absolute top-6 right-6 z-10">
+                            <button onClick={() => setShowDetailView(false)} className={`${theme.btnMuted} border p-3 rounded-full transition-all hover:rotate-90`}>
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="flex flex-col md:flex-row h-full max-h-[90vh] overflow-y-auto no-scrollbar">
+                            <div className="w-full md:w-1/2 aspect-square bg-slate-100 dark:bg-slate-800 flex items-center justify-center border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800">
+                                {selectedDetailItem.image ? (
+                                    <img src={selectedDetailItem.image} className="w-full h-full object-cover" />
+                                ) : (
+                                    <Package size={64} className="text-slate-300 dark:text-slate-700" />
+                                )}
+                            </div>
+
+                            <div className="p-8 flex-1 flex flex-col">
+                                <div className="mb-6">
+                                    <div className={`text-[10px] font-black uppercase tracking-[0.2em] text-blue-500 mb-2`}>{selectedDetailItem.store || 'Market'} • {selectedDetailItem.category}</div>
+                                    <h2 className={`text-2xl font-black uppercase tracking-tighter leading-tight ${theme.text}`}>{selectedDetailItem.name}</h2>
+                                </div>
+
+                                <div className="flex items-baseline gap-2 mb-8">
+                                    <span className={`text-4xl font-black ${theme.text}`}>${parseFloat(selectedDetailItem.price).toFixed(2)}</span>
+                                    {selectedDetailItem.weight && (
+                                        <span className={`text-sm font-bold ${theme.textMuted}`}>/ {selectedDetailItem.weight}{selectedDetailItem.unit}</span>
+                                    )}
+                                </div>
+
+                                {!selectedDetailItem.isNonFood && (
+                                    <div className="space-y-4 mb-10">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            {[
+                                                { label: 'Protein', value: selectedDetailItem.protein, color: 'text-blue-500' },
+                                                { label: 'Carbs', value: selectedDetailItem.carbs, color: 'text-emerald-500' },
+                                                { label: 'Fats', value: selectedDetailItem.fats, color: 'text-orange-500' },
+                                                { label: 'Calories', value: selectedDetailItem.calories, color: 'text-purple-500' }
+                                            ].map(macro => (
+                                                <div key={macro.label} className={`${theme.inputBg} p-4 rounded-2xl border ${theme.border}`}>
+                                                    <div className={`text-[9px] font-black uppercase tracking-widest ${theme.textMuted} mb-1`}>{macro.label}</div>
+                                                    <div className={`text-lg font-black ${macro.color}`}>{macro.value || '--'}{macro.label === 'Calories' ? '' : 'g'}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="mt-auto flex gap-3">
+                                    <button
+                                        onClick={() => {
+                                            setViewingItem(selectedDetailItem);
+                                            setFormData(selectedDetailItem);
+                                            setOldServingSize(selectedDetailItem.servingSize || '100');
+                                            setMacroContext('editor');
+                                            setIsDrawerOpen(true);
+                                            setShowDetailView(false);
+                                        }}
+                                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-black uppercase tracking-widest text-[12px] py-4 rounded-2xl shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <Wand2 size={16} /> Edit Entry
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1465,12 +1562,63 @@ export default function App() {
                             <table className="w-full text-left text-sm border-collapse">
                                 <thead>
                                     <tr className={`border-b ${theme.border} ${theme.surface} text-[10px] font-black uppercase tracking-widest ${theme.textMuted}`}>
-                                        <th className="px-6 py-4">Item</th>
-                                        <th className="px-4 py-4">Store</th>
-                                        <th className="px-4 py-4">Total</th>
-                                        <th className="px-4 py-4 text-blue-600">Unit $</th>
-                                        {activeTab !== 'non-food' && <th className="px-4 py-4 text-orange-500 font-black">Pro</th>}
-                                        <th className="px-4 py-4 text-right pr-6">Action</th>
+                                        <th className="px-6 py-4 cursor-pointer hover:text-blue-600 transition-colors" onClick={() => setTableSort(prev => ({ key: 'name', direction: prev.key === 'name' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
+                                            <div className="flex items-center gap-1">
+                                                Item {tableSort.key === 'name' && (tableSort.direction === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+                                            </div>
+                                        </th>
+                                        {visibleColumns.includes('store') && (
+                                            <th className="px-4 py-4 cursor-pointer hover:text-blue-600 transition-colors" onClick={() => setTableSort(prev => ({ key: 'store', direction: prev.key === 'store' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
+                                                <div className="flex items-center gap-1">
+                                                    Store {tableSort.key === 'store' && (tableSort.direction === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+                                                </div>
+                                            </th>
+                                        )}
+                                        {visibleColumns.includes('total') && (
+                                            <th className="px-4 py-4 cursor-pointer hover:text-blue-600 transition-colors" onClick={() => setTableSort(prev => ({ key: 'total', direction: prev.key === 'total' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
+                                                <div className="flex items-center gap-1">
+                                                    Total {tableSort.key === 'total' && (tableSort.direction === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+                                                </div>
+                                            </th>
+                                        )}
+                                        {visibleColumns.includes('unitPrice') && (
+                                            <th className="px-4 py-4 cursor-pointer hover:text-blue-600 transition-colors text-blue-600" onClick={() => setTableSort(prev => ({ key: 'unitPrice', direction: prev.key === 'unitPrice' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
+                                                <div className="flex items-center gap-1">
+                                                    Unit $ {tableSort.key === 'unitPrice' && (tableSort.direction === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+                                                </div>
+                                            </th>
+                                        )}
+                                        {activeTab !== 'non-food' && visibleColumns.includes('pro') && (
+                                            <th className="px-4 py-4 cursor-pointer hover:text-blue-600 transition-colors text-orange-500 font-black" onClick={() => setTableSort(prev => ({ key: 'pro', direction: prev.key === 'pro' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
+                                                <div className="flex items-center gap-1">
+                                                    Pro {tableSort.key === 'pro' && (tableSort.direction === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+                                                </div>
+                                            </th>
+                                        )}
+                                        <th className="px-4 py-4 text-right pr-6">
+                                            <div className="flex items-center justify-end gap-2 text-slate-400">
+                                                <span>Action</span>
+                                                <div className="relative group">
+                                                    <button className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-all opacity-40 hover:opacity-100">
+                                                        <Settings2 size={14} />
+                                                    </button>
+                                                    <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl p-3 z-20 hidden group-hover:block transition-all">
+                                                        <div className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2 px-1 text-left">Visible Columns</div>
+                                                        {['store', 'total', 'unitPrice', 'pro'].map(col => (
+                                                            <label key={col} className="flex items-center gap-3 px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer transition-colors w-full">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={visibleColumns.includes(col)}
+                                                                    onChange={() => setVisibleColumns(prev => prev.includes(col) ? prev.filter(c => c !== col) : [...prev, col])}
+                                                                    className="w-3 h-3 rounded text-blue-600 focus:ring-blue-500"
+                                                                />
+                                                                <span className="text-[10px] font-bold uppercase text-slate-700 dark:text-slate-300 capitalize">{col === 'unitPrice' ? 'Unit Price' : col}</span>
+                                                            </label>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1481,9 +1629,8 @@ export default function App() {
                                         const isSelected = selectedIds.includes(entry.id);
                                         const isComparing = selectedIds.includes(entry.id);                            return (
                                     <tr key={entry.id} className={`border-b ${theme.border} hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group cursor-pointer`} onClick={() => {
-                                        setViewingItem(entry);
-                                        setFormData(entry);
-                                        setIsDrawerOpen(true);
+                                        setSelectedDetailItem(entry);
+                                        setShowDetailView(true);
                                     }}>
                                                 <td className="px-6 py-4 font-bold flex items-center gap-3">
                                                     <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 shrink-0 overflow-hidden flex items-center justify-center">
@@ -1491,21 +1638,23 @@ export default function App() {
                                                     </div>
                                                     <span className="truncate max-w-[120px] md:max-w-[200px]">{entry.name}</span>
                                                 </td>
-                                                <td className="px-4 py-4 text-[10px] font-black uppercase opacity-60">{entry.store || 'Market'}</td>
-                                                <td className="px-4 py-4 font-black">${parseFloat(entry.price).toFixed(2)}</td>
-                                                <td className="px-4 py-4 md:whitespace-nowrap">
-                                                    <span className={`px-2 py-1 rounded-lg font-black text-[11px] ${displayMetric === 'unit' ? 'bg-blue-600/10 text-blue-600' : 'bg-orange-500/10 text-orange-500'}`}>
-                                                        {(() => {
-                                                            if (!entry.isNonFood && displayMetric !== 'unit' && displayMetric !== 'kg' && displayMetric !== 'lb') {
-                                                                if (displayMetric === 'calories') return `${m[`${displayMetric}Yield`] || '--'} CAL/$1`;
-                                                                return `${m[`${displayMetric}Yield`] || '--'}g ${displayMetric.substring(0, 3).toUpperCase()}/$1`;
-                                                            } else if (displayMetric === 'kg') return `$${m.pricePerKg || '--'}/kg`;
-                                                            else if (displayMetric === 'lb') return `$${m.pricePerLb || '--'}/lb`;
-                                                            return `$${m.normalized}/${displayGranularity}${unitLabel}`;
-                                                        })()}
-                                                    </span>
-                                                </td>
-                                                {activeTab !== 'non-food' && (
+                                                {visibleColumns.includes('store') && <td className="px-4 py-4 text-[10px] font-black uppercase opacity-60 truncate max-w-[80px]">{entry.store || 'Market'}</td>}
+                                                {visibleColumns.includes('total') && <td className="px-4 py-4 font-black">${parseFloat(entry.price).toFixed(2)}</td>}
+                                                {visibleColumns.includes('unitPrice') && (
+                                                    <td className="px-4 py-4 md:whitespace-nowrap">
+                                                        <span className={`px-2 py-1 rounded-lg font-black text-[11px] ${displayMetric === 'unit' ? 'bg-blue-600/10 text-blue-600' : 'bg-orange-500/10 text-orange-500'}`}>
+                                                            {(() => {
+                                                                if (!entry.isNonFood && displayMetric !== 'unit' && displayMetric !== 'kg' && displayMetric !== 'lb') {
+                                                                    if (displayMetric === 'calories') return `${m[`${displayMetric}Yield`] || '--'} CAL/$1`;
+                                                                    return `${m[`${displayMetric}Yield`] || '--'}g ${displayMetric.substring(0, 3).toUpperCase()}/$1`;
+                                                                } else if (displayMetric === 'kg') return `$${m.pricePerKg || '--'}/kg`;
+                                                                else if (displayMetric === 'lb') return `$${m.pricePerLb || '--'}/lb`;
+                                                                return `$${m.normalized}/${displayGranularity}${unitLabel}`;
+                                                            })()}
+                                                        </span>
+                                                    </td>
+                                                )}
+                                                {activeTab !== 'non-food' && visibleColumns.includes('pro') && (
                                                     <td className="px-4 py-4 text-[11px] font-bold text-orange-500">
                                                         {m.proteinYield || '--'}g/$1
                                                     </td>
@@ -1544,7 +1693,7 @@ export default function App() {
                             }
 
                             return (
-                                <div key={entry.id} className={`group ${theme.surface} p-4 rounded-[1.8rem] border transition-all relative overflow-hidden flex gap-4 items-center ${isComparing || isSelected ? 'border-blue-500 ring-4 ring-blue-500/20' : `${theme.border} shadow-sm ${theme.cardHover} active:scale-[0.98] cursor-pointer`}`}>
+                                <div key={entry.id} className={`group ${theme.surface} p-4 rounded-[1.8rem] border transition-all relative flex gap-4 items-center ${isComparing || isSelected ? 'border-blue-500 ring-4 ring-blue-500/20' : `${theme.border} shadow-sm ${theme.cardHover} active:scale-[0.98] cursor-pointer`}`}>
                                     {/* Image Section */}
                                     <div className="relative shrink-0">
                                         <div
@@ -1572,23 +1721,20 @@ export default function App() {
 
                                     {/* Content Section */}
                                     <div className="flex-1 min-w-0" onClick={() => {
-                                        setViewingItem(entry);
-                                        setFormData(entry);
-                                        setOldServingSize(entry.servingSize || '100');
-                                        setMacroContext('editor');
-                                        setIsDrawerOpen(true);
+                                        setSelectedDetailItem(entry);
+                                        setShowDetailView(true);
                                     }}>
-                                        <h3 className={`text-[13px] font-black uppercase leading-tight ${theme.text} mb-1 line-clamp-2`}>
+                                        <h3 className={`text-[13px] font-black uppercase leading-tight ${theme.text} mb-1 line-clamp-2 break-words`}>
                                             {entry.name}
                                         </h3>
-                                        <div className={`text-[10px] font-bold ${theme.textMuted} uppercase tracking-tight flex items-center gap-1.5`}>
-                                            <span>{entry.store || 'Market'}</span>
-                                            <span className="opacity-50">•</span>
-                                            <span>{entry.weight}{entry.unit}</span>
+                                        <div className={`text-[10px] font-bold ${theme.textMuted} uppercase tracking-tight flex items-center gap-1 overflow-hidden`}>
+                                            <span className="truncate min-w-0">{entry.store || 'Market'}</span>
+                                            <span className="opacity-50 shrink-0">•</span>
+                                            <span className="shrink-0 whitespace-nowrap">{entry.weight}{entry.unit}</span>
                                         </div>
 
-                                        <div className="flex justify-between items-center mt-3">
-                                            <div className="flex flex-col">
+                                        <div className="flex justify-between items-end mt-3 gap-2">
+                                            <div className="flex flex-col shrink-0">
                                                 <span className={`text-[18px] font-black ${theme.text}`}>${parseFloat(entry.price).toFixed(2)}</span>
                                                 {entry.isSale && entry.originalPrice && parseFloat(entry.originalPrice) > parseFloat(entry.price) && (
                                                     <div className="flex items-center gap-1">
@@ -1597,7 +1743,7 @@ export default function App() {
                                                     </div>
                                                 )}
                                             </div>
-                                            <div className={`px-4 py-2 rounded-2xl text-[12px] font-black shadow-lg transition-all ${entry.isSale ? 'bg-red-500 text-white' : (displayMetric === 'unit' ? 'bg-blue-600 text-white' : 'bg-orange-500 text-white')}`}>
+                                            <div className={`shrink-0 px-3 py-2 rounded-2xl text-[11px] font-black shadow-md whitespace-nowrap ${entry.isSale ? 'bg-red-500 text-white' : (displayMetric === 'unit' ? 'bg-blue-600 text-white' : 'bg-orange-500 text-white')}`}>
                                                 {(() => {
                                                     if (!entry.isNonFood && displayMetric !== 'unit' && displayMetric !== 'kg' && displayMetric !== 'lb') {
                                                         if (displayMetric === 'calories') return `${m[`${displayMetric}Yield`] || 'N/A'} CAL/$1`;

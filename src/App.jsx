@@ -119,6 +119,11 @@ export default function App() {
 
     useEffect(() => {
         localStorage.setItem('nutripricer_theme', isDarkMode ? 'dark' : 'light');
+        if (isDarkMode) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
     }, [isDarkMode]);
 
     // --- Theme Variables ---

@@ -5,7 +5,7 @@ import {
     Filter, ShoppingCart, Tag, ChevronDown, Trash2, Camera, Image as ImageIcon,
     CheckCircle2, RotateCcw, Layers, MessageSquare, Send, UserCog, List, RefreshCw, Sparkles,
     ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Loader2, Maximize2, Settings, Moon, Sun, Folder,
-    CheckSquare
+    CheckSquare, LayoutGrid
 } from 'lucide-react';
 
 // --- Local Storage Database Mock (Firebase API Shim) ---
@@ -75,12 +75,19 @@ const db = getFirestore();
 
 const PERSISTENT_APP_ID = import.meta.env.VITE_APP_ID || 'nutripricer_v1_stable';
 const UNIT_CONVERSIONS = { g: 1, kg: 1000, oz: 28.3495, lb: 453.592, ml: 1, l: 1000, ct: 1, scoop: 1, piece: 1, bar: 1 };
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY || ""; // Environment handles this
 
 const STANDARD_CATEGORIES = [
     'Meat & Seafood', 'Dairy & Eggs', 'Produce', 'Pantry & Dry Goods',
     'Snacks & Sweets', 'Frozen', 'Beverages', 'Supplements',
     'Cleaning', 'Personal Care', 'Paper Goods', 'Pet Supplies', 'Other'
+];
+
+const CHANGELOG = [
+    { version: "1.0.5", date: "March 12, 2026", notes: ["Added price per kg and per lb display metrics.", "Improved text wrapping on desktop for better readability."] },
+    { version: "1.0.4", date: "March 2026", notes: ["Added explicit error handling for invalid API keys.", "Added API Status checker in Settings.", "Added Version History modal."] },
+    { version: "1.0.3", date: "March 2026", notes: ["Secured Gemini API Key to local browser storage to prevent GitHub Pages leaks."] },
+    { version: "1.0.2", date: "March 2026", notes: ["Resolved Node build conflicts and enforced standard Vite configuration."] },
+    { version: "1.0.1", date: "February 2026", notes: ["Migrated single HTML app wrapper to fully-fledged React and Vite build system.", "Mocked out Firebase dependencies with localStorage APIs."] }
 ];
 
 const MEAT_DATABASE = {
@@ -143,6 +150,24 @@ export default function App() {
     const [loading, setLoading] = useState(true);
     const [compareIds, setCompareIds] = useState([]);
 
+    // --- Layout & View States ---
+    const [viewMode, setViewMode] = useState(() => {
+        if (typeof window !== 'undefined') return localStorage.getItem('nutripricer_viewMode') || 'grid';
+        return 'grid';
+    });
+    const [showImages, setShowImages] = useState(() => {
+        if (typeof window !== 'undefined') return localStorage.getItem('nutripricer_showImages') !== 'false';
+        return true;
+    });
+
+    useEffect(() => {
+        localStorage.setItem('nutripricer_viewMode', viewMode);
+    }, [viewMode]);
+
+    useEffect(() => {
+        localStorage.setItem('nutripricer_showImages', showImages);
+    }, [showImages]);
+
     // --- Selection Mode States ---
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [selectedIds, setSelectedIds] = useState([]);
@@ -175,6 +200,17 @@ export default function App() {
     const [tempPersona, setTempPersona] = useState('');
     const [showPersonaSettings, setShowPersonaSettings] = useState(false);
 
+    const [geminiApiKey, setGeminiApiKey] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('nutripricer_gemini_key') || '';
+        }
+        return '';
+    });
+    const [tempApiKey, setTempApiKey] = useState('');
+    const [showApiSettings, setShowApiSettings] = useState(false);
+    const [apiStatus, setApiStatus] = useState('idle');
+    const [showChangelog, setShowChangelog] = useState(false);
+
     const fileInputRef = useRef(null);
     const cameraInputRef = useRef(null);
     const galleryInputRef = useRef(null);
@@ -189,8 +225,23 @@ export default function App() {
     const [oldServingSize, setOldServingSize] = useState('100');
     const [batchOldServingSize, setBatchOldServingSize] = useState('100');
 
+    const testApiKey = async (key) => {
+        if (!key || !key.trim()) { setApiStatus('invalid'); return; }
+        setApiStatus('testing');
+        try {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key.trim()}`);
+            setApiStatus(response.ok ? 'valid' : 'invalid');
+        } catch (err) {
+            setApiStatus('invalid');
+        }
+    };
+
     // --- Safe AI Helper with Strict Schema Enforcement ---
     const callGemini = async (prompt, systemPrompt = "You are an AI.", imageDataBase64 = null, expectedSchema = null) => {
+        if (!geminiApiKey) {
+            setConfirmDialog({ isOpen: true, message: "Gemini API Key is missing. Please add it in the Settings menu.", hideCancel: true, onConfirm: () => setConfirmDialog({ isOpen: false }) });
+            return null;
+        }
         let retries = 0;
         while (retries <= 5) {
             try {
@@ -209,14 +260,22 @@ export default function App() {
                     payload.generationConfig.responseSchema = expectedSchema;
                 }
 
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
 
-                if (!response.ok) throw new Error('API request failed');
-                const result = await response.json();
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error("Gemini API Error:", response.status, errorText);
+                    if (response.status === 400 && errorText.includes("API_KEY_INVALID")) {
+                        setConfirmDialog({ isOpen: true, message: "Invalid API Key. Please verify the key in Settings.", hideCancel: true, onConfirm: () => setConfirmDialog({ isOpen: false }) });
+                        return null;
+                    }
+                    throw new Error('API request failed');
+                }
+                const result = JSON.parse(await response.text());
 
                 let textResponse = result.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
                 textResponse = textResponse.replace(new RegExp('```json', 'gi'), '').replace(new RegExp('```', 'g'), '').trim();
@@ -260,7 +319,9 @@ export default function App() {
                     const dbContext = buildAIContext();
                     const prompt = `Generate a very brief, friendly opening message (1-2 sentences). Mention something specific from my DB context: ${dbContext}. Keep it conversational and helpful. DO NOT wrap the response in markdown.`;
 
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+                    if (!geminiApiKey) throw new Error("No API Key");
+
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -762,6 +823,11 @@ export default function App() {
     const callChat = async (e) => {
         e.preventDefault();
         if (!chatInput.trim()) return;
+        if (!geminiApiKey) {
+            setChatMessages([...chatMessages, { role: 'model', text: "Please set your Gemini API key in the settings first." }]);
+            setChatInput('');
+            return;
+        }
         const msgs = [...chatMessages, { role: 'user', text: chatInput }];
         setChatMessages(msgs);
         setChatInput('');
@@ -769,7 +835,7 @@ export default function App() {
 
         try {
             const dbContext = buildAIContext();
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -777,7 +843,17 @@ export default function App() {
                     systemInstruction: { parts: [{ text: `You are NutriPricer Coach. Context: ${userPersona}. User DB Summary: ${dbContext}` }] }
                 })
             });
-            const result = await response.json();
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                if (response.status === 400 && errorText.includes("API_KEY_INVALID")) {
+                    setChatMessages([...msgs, { role: 'model', text: "Invalid API Key. Please check your key in Settings." }]);
+                    setAiLoading(false);
+                    return;
+                }
+                throw new Error("Request failed");
+            }
+            const result = JSON.parse(await response.text());
             const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
             setChatMessages([...msgs, { role: 'model', text: text || "I encountered an error." }]);
         } catch (err) {
@@ -821,7 +897,16 @@ export default function App() {
     }, [user]);
 
     const uniqueStores = useMemo(() => {
-        const stores = new Set(entries.map(e => e.store || 'Market'));
+        const stores = new Set(entries.map(e => {
+            let normalizedStore = e.store || 'Market';
+            for (const [pattern, storeName] of Object.entries(STORE_ALIASES)) {
+                if (new RegExp(`^${pattern}$`, 'i').test(normalizedStore) || new RegExp(`\\b(?:${pattern})\\b`, 'i').test(normalizedStore)) {
+                    normalizedStore = storeName;
+                    break;
+                }
+            }
+            return normalizedStore;
+        }));
         return ['All Stores', ...Array.from(stores).sort()];
     }, [entries]);
 
@@ -895,8 +980,13 @@ export default function App() {
         const totalCalsInPkg = (totalWeightBase / servingInBaseUnits) * (parseFloat(item.calories) || 0);
         const calYield = price > 0 ? (totalCalsInPkg / price).toFixed(0) : null;
 
+        const pricePerKg = price > 0 && totalWeightBase > 0 ? (price / (totalWeightBase / 1000)).toFixed(2) : null;
+        const pricePerLb = price > 0 && totalWeightBase > 0 ? (price / (totalWeightBase / 453.592)).toFixed(2) : null;
+
         return {
             normalized,
+            pricePerKg,
+            pricePerLb,
             proteinYield: getYield('protein'),
             carbsYield: getYield('carbs'),
             fatsYield: getYield('fats'),
@@ -909,7 +999,18 @@ export default function App() {
     }, [granularity]);
 
     const filteredAndSortedEntries = useMemo(() => {
-        let result = entries.filter(e => {
+        let result = entries.map(entry => {
+            let normalizedStore = entry.store || 'Market';
+            for (const [pattern, storeName] of Object.entries(STORE_ALIASES)) {
+                if (new RegExp(`^${pattern}$`, 'i').test(normalizedStore) || new RegExp(`\\b(?:${pattern})\\b`, 'i').test(normalizedStore)) {
+                    normalizedStore = storeName;
+                    break;
+                }
+            }
+            return { ...entry, store: normalizedStore };
+        });
+
+        result = result.filter(e => {
             const matchesSearch = e.name?.toLowerCase().includes(searchQuery.toLowerCase());
             const matchesTab = activeTab === 'food' ? !e.isNonFood : e.isNonFood;
             const matchesStore = selectedStore === 'All Stores' || (e.store || 'Market') === selectedStore;
@@ -939,8 +1040,7 @@ export default function App() {
 
     const toggleCompare = (id) => {
         setCompareIds(prev =>
-            prev.includes(id) ? prev.filter(i => i !== id) :
-                prev.length < 2 ? [...prev, id] : [prev[1], id]
+            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
         );
     };
 
@@ -1175,6 +1275,8 @@ export default function App() {
                             <button onClick={handleBackup} className={`w-full ${theme.btnMuted} border p-4 rounded-2xl font-black uppercase text-[11px] tracking-widest flex items-center justify-center gap-2 transition-all`}><Download size={16} /> Backup Database</button>
                             <button onClick={() => fileInputRef.current?.click()} className={`w-full ${theme.btnMuted} border p-4 rounded-2xl font-black uppercase text-[11px] tracking-widest flex items-center justify-center gap-2 transition-all`}><Upload size={16} /> Restore Database</button>
                             <button onClick={() => { setTempPersona(userPersona); setShowPersonaSettings(true); setShowSettingsMenu(false); }} className={`w-full ${theme.btnMuted} border p-4 rounded-2xl font-black uppercase text-[11px] tracking-widest flex items-center justify-center gap-2 transition-all`}><UserCog size={16} /> Edit AI Persona</button>
+                            <button onClick={() => { setTempApiKey(geminiApiKey); testApiKey(geminiApiKey); setShowApiSettings(true); setShowSettingsMenu(false); }} className={`w-full ${theme.btnMuted} border p-4 rounded-2xl font-black uppercase text-[11px] tracking-widest flex items-center justify-center gap-2 transition-all`}><Zap size={16} /> Configure API Key</button>
+                            <button onClick={() => { setShowChangelog(true); setShowSettingsMenu(false); }} className={`w-full ${theme.btnMuted} border p-4 rounded-2xl font-black uppercase text-[11px] tracking-widest flex items-center justify-center gap-2 transition-all`}><Layers size={16} /> Version History</button>
 
                             <div className={`pt-4 border-t ${theme.border} mt-4`}>
                                 <button onClick={handleClearDatabase} className={`w-full ${isDarkMode ? 'bg-red-900/20 text-red-400 border border-red-900/50 hover:bg-red-900/40' : 'bg-red-50 hover:bg-red-100 text-red-600 border border-red-100'} p-4 rounded-2xl font-black uppercase text-[11px] tracking-widest flex items-center justify-center gap-2 transition-all`}><Trash2 size={16} /> Clear All Entries</button>
@@ -1190,13 +1292,13 @@ export default function App() {
                     <div className={`${isDarkMode ? 'bg-blue-900/10 border border-blue-500/20 backdrop-blur-xl' : 'bg-slate-900 ring-1 ring-white/10'} rounded-[2.5rem] p-6 text-white shadow-2xl relative overflow-hidden md:max-w-2xl md:mx-auto`}>
                         <div className="flex justify-between items-center mb-5">
                             <span className="text-[10px] font-black uppercase tracking-widest text-blue-400 flex items-center gap-2">
-                                <ArrowLeftRight size={14} /> Compare Mode
+                                <ArrowLeftRight size={14} /> Compare {compareIds.length} Items
                             </span>
                             <button onClick={() => setCompareIds([])} className="text-slate-500 hover:text-white p-1">
                                 <X size={18} />
                             </button>
                         </div>
-                        <div className="grid grid-cols-2 gap-6 divide-x divide-white/10">
+                        <div className={`grid gap-6 divide-x divide-white/10 overflow-x-auto`} style={{ gridTemplateColumns: `repeat(${compareIds.length}, minmax(140px, 1fr))` }}>
                             {compareIds.map(id => {
                                 const item = entries.find(e => e.id === id);
                                 if (!item) return null;
@@ -1262,7 +1364,8 @@ export default function App() {
             )}
 
             {/* View Controls */}
-            <div className="max-w-6xl mx-auto p-4 space-y-4">
+            <div className={`sticky top-0 z-40 ${theme.bg} bg-opacity-90 backdrop-blur-md pb-2 pt-4 shadow-sm transition-all duration-300`}>
+            <div className="max-w-6xl mx-auto px-4 space-y-4">
                 <div className="flex flex-col md:flex-row gap-4">
                     <div className={`flex p-1.5 rounded-[1.8rem] shadow-sm border ${theme.surface} ${theme.border} md:w-72 flex-shrink-0`}>
                         <button
@@ -1343,8 +1446,19 @@ export default function App() {
                     <div className={`h-6 w-px ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'} mx-1 flex-shrink-0`} />
 
                     {/* Macro View Picker */}
+                    {activeTab === 'non-food' && [
+                        { id: 'unit', label: 'Unit', icon: <Scale size={12} /> },
+                        { id: 'kg', label: 'Per kg', icon: <Scale size={12} /> },
+                        { id: 'lb', label: 'Per lb', icon: <Scale size={12} /> }
+                    ].map(btn => (
+                        <button key={btn.id} onClick={() => setDisplayMetric(btn.id)} className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-all flex-shrink-0 border ${displayMetric === btn.id ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20' : `${theme.surface} ${theme.textMuted} ${theme.border}`}`}>
+                            {btn.icon} {btn.label}
+                        </button>
+                    ))}
                     {activeTab === 'food' && [
                         { id: 'unit', label: 'Unit', icon: <Scale size={12} /> },
+                        { id: 'kg', label: 'Per kg', icon: <Scale size={12} /> },
+                        { id: 'lb', label: 'Per lb', icon: <Scale size={12} /> },
                         { id: 'protein', label: 'Pro', icon: <Zap size={12} /> },
                         { id: 'fats', label: 'Fat', icon: <Droplets size={12} /> },
                         { id: 'carbs', label: 'Carb', icon: <PieChart size={12} /> },
@@ -1354,10 +1468,21 @@ export default function App() {
                             {btn.icon} {btn.label}
                         </button>
                     ))}
+                    
+                    <div className={`h-6 w-px ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'} mx-1 flex-shrink-0`} />
+                    
+                    {/* View Options */}
+                    <button onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')} className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-all flex-shrink-0 border ${theme.surface} ${theme.textMuted} ${theme.border} hover:bg-slate-200 dark:hover:bg-slate-700`}>
+                        {viewMode === 'grid' ? <List size={12} /> : <LayoutGrid size={12} />} {viewMode === 'grid' ? 'List' : 'Grid'}
+                    </button>
+                    <button onClick={() => setShowImages(!showImages)} className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-all flex-shrink-0 border ${theme.surface} ${theme.textMuted} ${theme.border} hover:bg-slate-200 dark:hover:bg-slate-700`}>
+                        <ImageIcon size={12} className={!showImages ? 'opacity-50' : ''} /> {showImages ? 'Img On' : 'Img Off'}
+                    </button>
                 </div>
             </div>
+            </div>
 
-            <main className="max-w-6xl mx-auto px-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <main className={`max-w-6xl mx-auto px-4 gap-4 mt-4 ${viewMode === 'list' ? 'flex flex-col' : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}`}>
                 {loading ? <div className={`col-span-full text-center py-20 ${theme.textMuted} font-bold uppercase text-[10px] tracking-widest animate-pulse`}>Scanning Cloud...</div> :
                     filteredAndSortedEntries.map(entry => {
                         const m = calculateMetrics(entry);
@@ -1368,12 +1493,16 @@ export default function App() {
 
                         let badgeText = `$${m.normalized}/${displayGranularity}${unitLabel}`;
 
-                        if (!entry.isNonFood && displayMetric !== 'unit') {
+                        if (!entry.isNonFood && displayMetric !== 'unit' && displayMetric !== 'kg' && displayMetric !== 'lb') {
                             if (displayMetric === 'calories') {
-                                badgeText = `${m.caloriesYield || 'N/A'} Cal / $1`;
+                                badgeText = `${m[`${displayMetric}Yield`] || 'N/A'} CAL / $1`;
                             } else {
                                 badgeText = `${m[`${displayMetric}Yield`] || 'N/A'}g ${displayMetric.substring(0, 3).toUpperCase()} / $1`;
                             }
+                        } else if (displayMetric === 'kg') {
+                            badgeText = m.pricePerKg ? `$${m.pricePerKg} / kg` : 'N/A';
+                        } else if (displayMetric === 'lb') {
+                            badgeText = m.pricePerLb ? `$${m.pricePerLb} / lb` : 'N/A';
                         }
 
                         return (
@@ -1397,9 +1526,9 @@ export default function App() {
                                             toggleCompare(entry.id);
                                         }
                                     }}
-                                    className={`w-14 h-14 rounded-[1.2rem] flex items-center justify-center flex-shrink-0 transition-all overflow-hidden ${isComparing || isSelected ? 'bg-blue-600 text-white' : `${theme.inputBg} ${theme.textMuted} border ${theme.border} ${isDarkMode ? 'hover:bg-slate-700 hover:text-blue-400' : 'hover:bg-blue-50 hover:text-blue-500'}`}`}
+                                    className={`${showImages ? 'w-14 h-14' : 'w-10 h-10'} rounded-[1.2rem] flex items-center justify-center flex-shrink-0 transition-all overflow-hidden ${isComparing || isSelected ? 'bg-blue-600 text-white' : `${theme.inputBg} ${theme.textMuted} border ${theme.border} ${isDarkMode ? 'hover:bg-slate-700 hover:text-blue-400' : 'hover:bg-blue-50 hover:text-blue-500'}`}`}
                                 >
-                                    {isComparing || isSelected ? <ArrowLeftRight size={22} /> : (entry.image ? <img src={entry.image} className="w-full h-full object-cover" /> : (entry.isNonFood ? <Hash size={22} /> : (Object.keys(MEAT_DATABASE).some(k => entry.name.toLowerCase().includes(k)) ? <Beef size={22} /> : <Package size={22} />)))}
+                                    {isComparing || isSelected ? <ArrowLeftRight size={showImages ? 22 : 16} /> : (showImages ? (entry.image ? <img src={entry.image} className="w-full h-full object-cover" /> : (entry.isNonFood ? <Hash size={22} /> : (Object.keys(MEAT_DATABASE).some(k => entry.name.toLowerCase().includes(k)) ? <Beef size={22} /> : <Package size={22} />))) : <ArrowLeftRight size={16} />)}
                                 </div>
 
                                 <div className="flex-1 min-w-0" onClick={() => {
@@ -1416,7 +1545,7 @@ export default function App() {
                                     <div className="flex justify-between items-start mb-0.5 gap-3">
                                         <div className="flex items-start gap-1.5 min-w-0 flex-1">
                                             {entry.isSale && <Tag size={14} className="text-red-500 shrink-0 mt-[2px]" fill="currentColor" />}
-                                            <h3 className={`font-black ${theme.text} text-[14px] uppercase tracking-tight leading-snug line-clamp-2`}>
+                                            <h3 className={`text-[15px] font-black leading-tight ${theme.text} line-clamp-2 md:whitespace-normal break-words`}>
                                                 {entry.name}
                                             </h3>
                                         </div>
@@ -1435,13 +1564,13 @@ export default function App() {
 
                                     <div className="flex justify-between items-end mt-1 gap-2">
                                         <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                                            <span className={`text-[11px] font-black ${theme.text} uppercase flex items-center gap-1.5 truncate`}>
+                                            <span className={`text-[11px] font-black ${theme.text} uppercase flex items-center gap-1.5 line-clamp-2 md:whitespace-normal break-words`}>
                                                 <ShoppingCart size={11} className="text-blue-500 shrink-0" />
-                                                <span className="truncate">{entry.store || 'Market'}</span>
+                                                <span>{entry.store || 'Market'}</span>
                                                 <span className={theme.textMuted}>•</span>
-                                                <span className={`truncate ${theme.textMuted} text-[9px]`}>{entry.category || 'Other'}</span>
+                                                <span className={`${theme.textMuted} text-[9px]`}>{entry.category || 'Other'}</span>
                                             </span>
-                                            <span className={`text-[10px] font-bold ${theme.textMuted} uppercase tracking-tight truncate`}>
+                                            <span className={`text-[10px] font-bold ${theme.textMuted} uppercase tracking-tight`}>
                                                 {entry.quantity > 1 ? `${entry.quantity}× ` : ''}{entry.weight}{entry.unit}
                                             </span>
                                         </div>
@@ -1792,8 +1921,9 @@ export default function App() {
                         {/* Batch Macro Addition - Hidden if Non-Food */}
                         {!scanProposal.isNonFood && (
                             <div className="border-t border-white/10 pt-4 mb-8">
-                                <div className="flex justify-between items-center mb-4">
-                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nutrition (Optional)</span>
+                                <div className="flex gap-4 items-center mb-1">
+                                    <span className={`text-sm font-bold line-clamp-2 md:whitespace-normal break-words pr-4 ${theme.text} flex-1`}>{scanProposal.name}</span>
+                                    {scanProposal.isSale && <span className="text-[9px] font-black text-white bg-red-500 px-1.5 py-0.5 rounded uppercase tracking-widest leading-none shrink-0 self-start mt-1">Sale</span>}
                                     <button onClick={() => { setMacroContext('batch'); handleAiMacros('', 'batch'); }} className="bg-white/10 hover:bg-white/20 text-[9px] font-black uppercase px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all"><Sparkles size={12} /> AI Match</button>
                                 </div>
 
@@ -1940,6 +2070,81 @@ export default function App() {
                         <div className="flex gap-3 mt-6">
                             <button onClick={() => setShowPersonaSettings(false)} className={`flex-1 ${theme.btnMuted} py-4 rounded-2xl font-black uppercase tracking-widest transition-all border`}>Cancel</button>
                             <button onClick={() => { setUserPersona(tempPersona); setShowPersonaSettings(false); }} className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all">Save</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showApiSettings && (
+                <div className="fixed inset-0 z-[90] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in">
+                    <div className={`${theme.surface} w-full max-w-md rounded-[3rem] p-8 shadow-2xl border ${theme.border}`}>
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className={`w-10 h-10 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-900'} rounded-2xl flex items-center justify-center text-white`}><Zap size={20} /></div>
+                            <h3 className={`text-xl font-black uppercase tracking-tighter flex-1 ${theme.text}`}>Gemini API Key</h3>
+                        </div>
+                        <div className={`flex items-center justify-between mb-4 p-4 rounded-2xl border ${isDarkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                            <span className={`text-[11px] font-black uppercase tracking-widest ${theme.textMuted}`}>Connection Status</span>
+                            {apiStatus === 'testing' ? (
+                                <span className="flex items-center gap-1.5 text-[10px] font-black uppercase text-blue-500"><Loader2 size={12} className="animate-spin" /> Verifying</span>
+                            ) : apiStatus === 'valid' ? (
+                                <span className="flex items-center gap-1.5 text-[10px] font-black uppercase text-green-500 bg-green-500/10 px-2 py-1 rounded-lg"><CheckCircle2 size={12} /> Connected</span>
+                            ) : apiStatus === 'invalid' ? (
+                                <span className="flex items-center gap-1.5 text-[10px] font-black uppercase text-red-500 bg-red-500/10 px-2 py-1 rounded-lg"><X size={12} /> Invalid</span>
+                            ) : (
+                                <span className="flex items-center gap-1.5 text-[10px] font-black uppercase text-slate-500"><Activity size={12} /> Idle</span>
+                            )}
+                        </div>
+                        <p className={`text-[11px] font-black uppercase tracking-widest ${theme.textMuted} mb-4 leading-tight`}>
+                            Your key is stored securely in your browser's local storage and is never sent to our servers.
+                        </p>
+                        <input
+                            type="password"
+                            placeholder="AIzaSy..."
+                            className={`w-full p-5 ${theme.inputBg} border-2 ${theme.border} rounded-3xl text-sm font-medium outline-none focus:border-blue-600 transition-all shadow-inner ${theme.text}`}
+                            value={tempApiKey}
+                            onChange={e => setTempApiKey(e.target.value)}
+                        />
+                        <div className="flex gap-3 mt-6">
+                            <button onClick={() => { testApiKey(tempApiKey); }} className={`flex-1 ${theme.btnMuted} py-4 rounded-2xl font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-2`}><RotateCcw size={14} /> Test</button>
+                            <button onClick={() => {
+                                const cleanKey = tempApiKey.trim();
+                                setGeminiApiKey(cleanKey);
+                                localStorage.setItem('nutripricer_gemini_key', cleanKey);
+                                setShowApiSettings(false);
+                            }} className="flex-[2] bg-blue-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all flex items-center justify-center gap-2"><CheckCircle2 size={16} /> Save Key</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showChangelog && (
+                <div className="fixed inset-0 z-[95] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in">
+                    <div className={`${theme.surface} w-full max-w-md rounded-[3rem] p-8 shadow-2xl border ${theme.border} max-h-[85vh] flex flex-col`}>
+                        <div className="flex items-center justify-between mb-6 shrink-0">
+                            <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-900'} rounded-2xl flex items-center justify-center text-white`}><Layers size={20} /></div>
+                                <h3 className={`text-xl font-black uppercase tracking-tighter ${theme.text}`}>Version History</h3>
+                            </div>
+                            <button onClick={() => setShowChangelog(false)} className={`${theme.btnMuted} border p-2 rounded-full transition-colors`}><X size={16} /></button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto pr-2 space-y-4 no-scrollbar">
+                            {CHANGELOG.map((log, i) => (
+                                <div key={i} className={`p-5 rounded-3xl border ${theme.border} ${theme.inputBg}`}>
+                                    <div className="flex items-center justify-between mb-3 border-b border-slate-200 dark:border-slate-700 pb-2">
+                                        <span className="font-black text-blue-600 text-lg uppercase tracking-tight">v{log.version}</span>
+                                        <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textMuted}`}>{log.date}</span>
+                                    </div>
+                                    <ul className="space-y-2">
+                                        {log.notes.map((note, idx) => (
+                                            <li key={idx} className={`text-[12px] font-medium leading-relaxed ${theme.text} flex items-start gap-2`}>
+                                                <span className="text-blue-500 font-bold mt-0.5">•</span>
+                                                {note}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </div>

@@ -223,6 +223,54 @@ export default function App() {
     const [selectedDetailItem, setSelectedDetailItem] = useState(null);
     const [tableSort, setTableSort] = useState({ key: 'date', direction: 'desc' });
     const [visibleColumns, setVisibleColumns] = useState(['name', 'store', 'total', 'unitPrice', 'protein', 'carbs', 'fats', 'category']);
+    const [columnWidths, setColumnWidths] = useState(() => {
+        const saved = localStorage.getItem('nutripricer_columnWidths');
+        return saved ? JSON.parse(saved) : {
+            name: 200,
+            store: 120,
+            total: 100,
+            unitPrice: 150,
+            protein: 100,
+            carbs: 100,
+            fats: 100,
+            category: 120,
+            action: 100
+        };
+    });
+
+    const resizingColumn = useRef(null);
+    const startX = useRef(0);
+    const startWidth = useRef(0);
+
+    useEffect(() => {
+        localStorage.setItem('nutripricer_columnWidths', JSON.stringify(columnWidths));
+    }, [columnWidths]);
+
+    const handleMouseDown = useCallback((e, colKey) => {
+        e.preventDefault();
+        resizingColumn.current = colKey;
+        startX.current = e.pageX;
+        startWidth.current = columnWidths[colKey] || 100;
+
+        const onMouseMove = (moveEvent) => {
+            if (resizingColumn.current) {
+                const diff = moveEvent.pageX - startX.current;
+                setColumnWidths(prev => ({
+                    ...prev,
+                    [resizingColumn.current]: Math.max(50, startWidth.current + diff)
+                }));
+            }
+        };
+
+        const onMouseUp = () => {
+            resizingColumn.current = null;
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        };
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    }, [columnWidths]);
 
     const fileInputRef = useRef(null);
     const cameraInputRef = useRef(null);
@@ -1574,66 +1622,75 @@ export default function App() {
                 {loading ? <div className={`col-span-full text-center py-20 ${theme.textMuted} font-bold uppercase text-[10px] tracking-widest animate-pulse`}>Scanning Cloud...</div> :
                     (viewMode === 'table' ? (
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left text-sm border-collapse">
+                            <table className="w-full text-left text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
                                 <thead>
                                     <tr className={`border-b ${theme.border} ${theme.surface} text-[10px] font-black uppercase tracking-widest ${theme.textMuted}`}>
-                                        <th className="px-6 py-4 cursor-pointer hover:text-blue-600 transition-colors" onClick={() => setTableSort(prev => ({ key: 'name', direction: prev.key === 'name' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
+                                        <th className="px-6 py-4 cursor-pointer hover:text-blue-600 transition-colors relative group/header" style={{ width: columnWidths.name }} onClick={() => setTableSort(prev => ({ key: 'name', direction: prev.key === 'name' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
                                             <div className="flex items-center gap-1">
                                                 Item {tableSort.key === 'name' && (tableSort.direction === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
                                             </div>
+                                            <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize opacity-0 group-hover/header:opacity-100 bg-blue-500/20 hover:bg-blue-500/50 transition-all z-10" onMouseDown={(e) => handleMouseDown(e, 'name')} />
                                         </th>
                                         {visibleColumns.includes('store') && (
-                                            <th className="px-4 py-4 cursor-pointer hover:text-blue-600 transition-colors" onClick={() => setTableSort(prev => ({ key: 'store', direction: prev.key === 'store' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
+                                            <th className="px-4 py-4 cursor-pointer hover:text-blue-600 transition-colors relative group/header" style={{ width: columnWidths.store }} onClick={() => setTableSort(prev => ({ key: 'store', direction: prev.key === 'store' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
                                                 <div className="flex items-center gap-1">
                                                     Store {tableSort.key === 'store' && (tableSort.direction === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
                                                 </div>
+                                                <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize opacity-0 group-hover/header:opacity-100 bg-blue-500/20 hover:bg-blue-500/50 transition-all z-10" onMouseDown={(e) => handleMouseDown(e, 'store')} />
                                             </th>
                                         )}
                                         {visibleColumns.includes('total') && (
-                                            <th className="px-4 py-4 cursor-pointer hover:text-blue-600 transition-colors" onClick={() => setTableSort(prev => ({ key: 'total', direction: prev.key === 'total' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
+                                            <th className="px-4 py-4 cursor-pointer hover:text-blue-600 transition-colors relative group/header" style={{ width: columnWidths.total }} onClick={() => setTableSort(prev => ({ key: 'total', direction: prev.key === 'total' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
                                                 <div className="flex items-center gap-1">
                                                     Total {tableSort.key === 'total' && (tableSort.direction === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
                                                 </div>
+                                                <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize opacity-0 group-hover/header:opacity-100 bg-blue-500/20 hover:bg-blue-500/50 transition-all z-10" onMouseDown={(e) => handleMouseDown(e, 'total')} />
                                             </th>
                                         )}
                                         {visibleColumns.includes('unitPrice') && (
-                                            <th className="px-4 py-4 cursor-pointer hover:text-blue-600 transition-colors text-blue-600" onClick={() => setTableSort(prev => ({ key: 'unitPrice', direction: prev.key === 'unitPrice' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
+                                            <th className="px-4 py-4 cursor-pointer hover:text-blue-600 transition-colors text-blue-600 relative group/header" style={{ width: columnWidths.unitPrice }} onClick={() => setTableSort(prev => ({ key: 'unitPrice', direction: prev.key === 'unitPrice' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
                                                 <div className="flex items-center gap-1">
                                                     Unit $ {tableSort.key === 'unitPrice' && (tableSort.direction === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
                                                 </div>
+                                                <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize opacity-0 group-hover/header:opacity-100 bg-blue-500/20 hover:bg-blue-500/50 transition-all z-10" onMouseDown={(e) => handleMouseDown(e, 'unitPrice')} />
                                             </th>
                                         )}
                                         {activeTab !== 'non-food' && visibleColumns.includes('protein') && (
-                                            <th className="px-4 py-4 cursor-pointer hover:text-blue-600 transition-colors text-blue-600 font-black" onClick={() => setTableSort(prev => ({ key: 'protein', direction: prev.key === 'protein' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
+                                            <th className="px-4 py-4 cursor-pointer hover:text-blue-600 transition-colors text-blue-600 font-black relative group/header" style={{ width: columnWidths.protein }} onClick={() => setTableSort(prev => ({ key: 'protein', direction: prev.key === 'protein' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
                                                 <div className="flex items-center gap-1">
                                                     Protein {tableSort.key === 'protein' && (tableSort.direction === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
                                                 </div>
+                                                <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize opacity-0 group-hover/header:opacity-100 bg-blue-500/20 hover:bg-blue-500/50 transition-all z-10" onMouseDown={(e) => handleMouseDown(e, 'protein')} />
                                             </th>
                                         )}
                                         {activeTab !== 'non-food' && visibleColumns.includes('carbs') && (
-                                            <th className="px-4 py-4 cursor-pointer hover:text-blue-600 transition-colors text-emerald-500 font-black" onClick={() => setTableSort(prev => ({ key: 'carbs', direction: prev.key === 'carbs' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
+                                            <th className="px-4 py-4 cursor-pointer hover:text-blue-600 transition-colors text-emerald-500 font-black relative group/header" style={{ width: columnWidths.carbs }} onClick={() => setTableSort(prev => ({ key: 'carbs', direction: prev.key === 'carbs' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
                                                 <div className="flex items-center gap-1">
                                                     Carbs {tableSort.key === 'carbs' && (tableSort.direction === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
                                                 </div>
+                                                <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize opacity-0 group-hover/header:opacity-100 bg-blue-500/20 hover:bg-blue-500/50 transition-all z-10" onMouseDown={(e) => handleMouseDown(e, 'carbs')} />
                                             </th>
                                         )}
                                         {activeTab !== 'non-food' && visibleColumns.includes('fats') && (
-                                            <th className="px-4 py-4 cursor-pointer hover:text-blue-600 transition-colors text-orange-500 font-black" onClick={() => setTableSort(prev => ({ key: 'fats', direction: prev.key === 'fats' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
+                                            <th className="px-4 py-4 cursor-pointer hover:text-blue-600 transition-colors text-orange-500 font-black relative group/header" style={{ width: columnWidths.fats }} onClick={() => setTableSort(prev => ({ key: 'fats', direction: prev.key === 'fats' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
                                                 <div className="flex items-center gap-1">
                                                     Fat {tableSort.key === 'fats' && (tableSort.direction === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
                                                 </div>
+                                                <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize opacity-0 group-hover/header:opacity-100 bg-blue-500/20 hover:bg-blue-500/50 transition-all z-10" onMouseDown={(e) => handleMouseDown(e, 'fats')} />
                                             </th>
                                         )}
                                         {visibleColumns.includes('category') && (
-                                            <th className="px-4 py-4 cursor-pointer hover:text-blue-600 transition-colors opacity-50 font-black text-[9px]" onClick={() => setTableSort(prev => ({ key: 'category', direction: prev.key === 'category' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
+                                            <th className="px-4 py-4 cursor-pointer hover:text-blue-600 transition-colors opacity-50 font-black text-[9px] relative group/header" style={{ width: columnWidths.category }} onClick={() => setTableSort(prev => ({ key: 'category', direction: prev.key === 'category' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
                                                 <div className="flex items-center gap-1">
                                                     Type {tableSort.key === 'category' && (tableSort.direction === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
                                                 </div>
+                                                <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize opacity-0 group-hover/header:opacity-100 bg-blue-500/20 hover:bg-blue-500/50 transition-all z-10" onMouseDown={(e) => handleMouseDown(e, 'category')} />
                                             </th>
                                         )}
-                                        <th className="px-4 py-4 text-right pr-6">
+                                        <th className="px-4 py-4 text-right pr-6 relative group/header" style={{ width: columnWidths.action }}>
                                             <div className="flex items-center justify-end gap-2 text-slate-400">
                                                 <span>Action</span>
+                                                <div className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize opacity-0 group-hover/header:opacity-100 bg-blue-500/20 hover:bg-blue-500/50 transition-all z-10" onMouseDown={(e) => handleMouseDown(e, 'action')} />
                                                 <div className="relative group">
                                                     <button className={`p-1 ${isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'} rounded-md transition-all opacity-40 hover:opacity-100`}>
                                                         <Settings2 size={14} />

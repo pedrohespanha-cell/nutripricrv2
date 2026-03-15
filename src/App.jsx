@@ -1244,17 +1244,17 @@ export default function App() {
                             </div>
                         </div>
 
-                        <nav className="flex items-center gap-0.5 ml-2 md:ml-4 py-1 px-1 bg-slate-100 dark:bg-slate-800 rounded-xl shrink-0">
+                        <nav className={`flex items-center gap-0.5 ml-2 md:ml-4 py-1 px-1 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'} rounded-xl shrink-0`}>
                             <button
                                 onClick={() => { setActiveTab('food'); setDisplayMetric('unit'); }}
-                                className={`px-2 md:px-4 py-1.5 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${activeTab === 'food' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : theme.textMuted}`}
+                                className={`px-2 md:px-4 py-1.5 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${activeTab === 'food' ? `${isDarkMode ? 'bg-slate-700' : 'bg-white'} text-blue-600 shadow-sm` : theme.textMuted}`}
                             >
                                 <span className="md:hidden">Food</span>
                                 <span className="hidden md:inline">Nutrition</span>
                             </button>
                             <button
                                 onClick={() => { setActiveTab('non-food'); setDisplayMetric('unit'); }}
-                                className={`px-2 md:px-4 py-1.5 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${activeTab === 'non-food' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : theme.textMuted}`}
+                                className={`px-2 md:px-4 py-1.5 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${activeTab === 'non-food' ? `${isDarkMode ? 'bg-slate-700' : 'bg-white'} text-blue-600 shadow-sm` : theme.textMuted}`}
                             >
                                 <span className="md:hidden">Home</span>
                                 <span className="hidden md:inline">Household</span>
@@ -1283,7 +1283,7 @@ export default function App() {
                             </button>
                         </div>
                         <div className={`h-8 w-px ${theme.border} mx-1 hidden md:block`} />
-                        <button onClick={() => setIsChatOpen(true)} className={`p-2.5 rounded-xl border ${theme.border} ${theme.surface} ${theme.textMuted} hidden md:block transition-all hover:bg-blue-50 dark:hover:bg-blue-900/20`}>
+                        <button onClick={() => setIsChatOpen(true)} className={`p-2.5 rounded-xl border ${theme.border} ${theme.surface} ${theme.textMuted} hidden md:block transition-all ${isDarkMode ? 'hover:bg-blue-900/20' : 'hover:bg-blue-50'}`}>
                             <MessageSquare size={18} />
                         </button>
                         <button onClick={() => setShowSettingsMenu(!showSettingsMenu)} className={`p-2.5 rounded-xl border ${theme.border} ${theme.surface} ${theme.textMuted} transition-all`}>
@@ -1421,11 +1421,11 @@ export default function App() {
                         </div>
 
                         <div className="flex flex-col md:flex-row h-full max-h-[90vh] overflow-y-auto no-scrollbar">
-                            <div className="w-full md:w-1/2 aspect-square bg-slate-100 dark:bg-slate-800 flex items-center justify-center border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800">
+                            <div className={`w-full md:w-1/2 aspect-square ${isDarkMode ? 'bg-slate-800 border-slate-800' : 'bg-slate-100 border-slate-200'} flex items-center justify-center border-b md:border-b-0 md:border-r`}>
                                 {selectedDetailItem.image ? (
                                     <img src={selectedDetailItem.image} className="w-full h-full object-cover" />
                                 ) : (
-                                    <Package size={64} className="text-slate-300 dark:text-slate-700" />
+                                    <Package size={64} className={isDarkMode ? 'text-slate-700' : 'text-slate-300'} />
                                 )}
                             </div>
 
@@ -1550,7 +1550,7 @@ export default function App() {
                             const next = modes[(modes.indexOf(viewMode) + 1) % modes.length];
                             setViewMode(next);
                         }}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-[10px] font-black uppercase border shadow-sm transition-all ${theme.surface} ${theme.textMuted} ${theme.border} active:scale-95 hover:bg-blue-50 dark:hover:bg-slate-800`}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-[10px] font-black uppercase border shadow-sm transition-all ${theme.surface} ${theme.textMuted} ${theme.border} active:scale-95 ${isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-blue-50'}`}
                     >
                         {viewMode === 'grid' && <LayoutGrid size={14} />}
                         {viewMode === 'list' && <List size={14} />}
@@ -1604,7 +1604,7 @@ export default function App() {
                                             <div className="flex items-center justify-end gap-2 text-slate-400">
                                                 <span>Action</span>
                                                 <div className="relative group">
-                                                    <button className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-all opacity-40 hover:opacity-100">
+                                                    <button className={`p-1 ${isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'} rounded-md transition-all opacity-40 hover:opacity-100`}>
                                                         <Settings2 size={14} />
                                                     </button>
                                                     <div className={`absolute top-full right-0 mt-2 w-48 ${theme.surface} border ${theme.border} rounded-xl shadow-2xl p-3 z-20 hidden group-hover:block transition-all`}>
@@ -1633,12 +1633,12 @@ export default function App() {
                                         const unitLabel = entry.unit === 'ct' ? 'ct' : (granularity === 1000 ? (entry.unit === 'ml' || entry.unit === 'l' ? 'L' : 'kg') : (entry.unit === 'ml' || entry.unit === 'l' ? 'ml' : 'g'));
                                         const isSelected = selectedIds.includes(entry.id);
                                         const isComparing = selectedIds.includes(entry.id);                            return (
-                                    <tr key={entry.id} className={`border-b ${theme.border} hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group cursor-pointer`} onClick={() => {
+                                    <tr key={entry.id} className={`border-b ${theme.border} ${isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-50'} transition-colors group cursor-pointer`} onClick={() => {
                                         setSelectedDetailItem(entry);
                                         setShowDetailView(true);
                                     }}>
                                                 <td className="px-6 py-4 font-bold flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 shrink-0 overflow-hidden flex items-center justify-center">
+                                                    <div className={`w-8 h-8 rounded-lg ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'} shrink-0 overflow-hidden flex items-center justify-center`}>
                                                         {entry.image ? <img src={entry.image} className="w-full h-full object-cover" /> : <Package size={14} className={theme.textMuted} />}
                                                     </div>
                                                     <span className="truncate max-w-[120px] md:max-w-[200px]">{entry.name}</span>
@@ -1665,7 +1665,7 @@ export default function App() {
                                                     </td>
                                                 )}
                                                 <td className="px-4 py-4 text-right pr-6">
-                                                    <button onClick={(e) => { e.stopPropagation(); toggleCompare(entry.id); }} className={`p-2 rounded-lg transition-colors ${isComparing ? 'bg-blue-600 text-white' : 'hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400'}`}>
+                                                    <button onClick={(e) => { e.stopPropagation(); toggleCompare(entry.id); }} className={`p-2 rounded-lg transition-colors ${isComparing ? 'bg-blue-600 text-white' : `${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-200'} text-slate-400`}`}>
                                                         <ArrowLeftRight size={14} />
                                                     </button>
                                                 </td>
@@ -1717,7 +1717,7 @@ export default function App() {
                                         {showImages && (
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); toggleCompare(entry.id); }}
-                                                className={`absolute -bottom-2 -right-2 p-2 rounded-full shadow-lg border-2 z-10 transition-all ${isComparing ? 'bg-blue-600 text-white border-white dark:border-slate-900' : 'bg-white dark:bg-slate-800 text-blue-600 border-white dark:border-slate-900 hover:scale-110'}`}
+                                                className={`absolute -bottom-2 -right-2 p-2 rounded-full shadow-lg border-2 z-10 transition-all ${isComparing ? `bg-blue-600 text-white ${isDarkMode ? 'border-slate-900' : 'border-white'}` : `${isDarkMode ? 'bg-slate-800 border-slate-900' : 'bg-white border-white'} text-blue-600 hover:scale-110`}`}
                                             >
                                                 <ArrowLeftRight size={16} />
                                             </button>
@@ -2372,7 +2372,7 @@ export default function App() {
                         <div className="flex-1 overflow-y-auto pr-2 space-y-4 no-scrollbar">
                             {CHANGELOG.map((log, i) => (
                                 <div key={i} className={`p-5 rounded-3xl border ${theme.border} ${theme.inputBg}`}>
-                                    <div className="flex items-center justify-between mb-3 border-b border-slate-200 dark:border-slate-700 pb-2">
+                                    <div className={`flex items-center justify-between mb-3 border-b ${isDarkMode ? 'border-slate-700' : 'border-slate-200'} pb-2`}>
                                         <span className="font-black text-blue-600 text-lg uppercase tracking-tight">v{log.version}</span>
                                         <span className={`text-[10px] font-bold uppercase tracking-widest ${theme.textMuted}`}>{log.date}</span>
                                     </div>

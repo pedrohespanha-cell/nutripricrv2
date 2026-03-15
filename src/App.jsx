@@ -222,7 +222,7 @@ export default function App() {
     const [showDetailView, setShowDetailView] = useState(false);
     const [selectedDetailItem, setSelectedDetailItem] = useState(null);
     const [tableSort, setTableSort] = useState({ key: 'date', direction: 'desc' });
-    const [visibleColumns, setVisibleColumns] = useState(['name', 'store', 'total', 'unitPrice', 'pro']);
+    const [visibleColumns, setVisibleColumns] = useState(['name', 'store', 'total', 'unitPrice', 'protein', 'carbs', 'fats', 'category']);
 
     const fileInputRef = useRef(null);
     const cameraInputRef = useRef(null);
@@ -1043,7 +1043,10 @@ export default function App() {
                     case 'store': valA = a.store || 'Market'; valB = b.store || 'Market'; break;
                     case 'total': valA = parseFloat(a.price); valB = parseFloat(b.price); break;
                     case 'unitPrice': valA = parseFloat(ma.normalized); valB = parseFloat(mb.normalized); break;
-                    case 'pro': valA = parseFloat(ma.proteinYield) || 0; valB = parseFloat(mb.proteinYield) || 0; break;
+                    case 'protein': valA = parseFloat(ma.proteinYield) || 0; valB = parseFloat(mb.proteinYield) || 0; break;
+                    case 'carbs': valA = parseFloat(ma.carbsYield) || 0; valB = parseFloat(mb.carbsYield) || 0; break;
+                    case 'fats': valA = parseFloat(ma.fatsYield) || 0; valB = parseFloat(mb.fatsYield) || 0; break;
+                    case 'category': valA = a.category || 'Other'; valB = b.category || 'Other'; break;
                     case 'date': valA = a.createdAt?.seconds || 0; valB = b.createdAt?.seconds || 0; break;
                     default: valA = 0; valB = 0;
                 }
@@ -1435,12 +1438,19 @@ export default function App() {
                                     <h2 className={`text-2xl font-black uppercase tracking-tighter leading-tight ${theme.text}`}>{selectedDetailItem.name}</h2>
                                 </div>
 
-                                <div className="flex items-baseline gap-2 mb-8">
-                                    <span className={`text-4xl font-black ${theme.text}`}>${parseFloat(selectedDetailItem.price).toFixed(2)}</span>
-                                    {selectedDetailItem.weight && (
-                                        <span className={`text-sm font-bold ${theme.textMuted}`}>/ {selectedDetailItem.weight}{selectedDetailItem.unit}</span>
-                                    )}
-                                </div>
+                                    <div className="flex flex-col">
+                                        <div className="flex items-baseline gap-2">
+                                            <span className={`text-4xl font-black ${theme.text}`}>${parseFloat(selectedDetailItem.price).toFixed(2)}</span>
+                                            {selectedDetailItem.weight && (
+                                                <span className={`text-sm font-bold ${theme.textMuted}`}>/ {selectedDetailItem.quantity > 1 ? `${selectedDetailItem.quantity}x` : ''}{selectedDetailItem.weight}{selectedDetailItem.unit}</span>
+                                            )}
+                                        </div>
+                                        {selectedDetailItem.quantity > 1 && (
+                                            <div className={`text-[10px] font-black uppercase tracking-widest ${theme.textMuted} mt-1`}>
+                                                ${(parseFloat(selectedDetailItem.price) / parseFloat(selectedDetailItem.quantity)).toFixed(2)} per {selectedDetailItem.weight}{selectedDetailItem.unit}
+                                            </div>
+                                        )}
+                                    </div>
 
                                 {!selectedDetailItem.isNonFood && (
                                     <div className="space-y-4 mb-10">
@@ -1452,7 +1462,7 @@ export default function App() {
                                                 { label: 'Calories', value: selectedDetailItem.calories, color: 'text-purple-500' }
                                             ].map(macro => (
                                                 <div key={macro.label} className={`${theme.inputBg} p-4 rounded-2xl border ${theme.border}`}>
-                                                    <div className={`text-[9px] font-black uppercase tracking-widest ${theme.textMuted} mb-1`}>{macro.label}</div>
+                                                    <div className={`text-[9px] font-black uppercase tracking-widest ${theme.textMuted} mb-1 line-clamp-1`}>{macro.label} <span className="opacity-60 text-[8px]">per {selectedDetailItem.servingSize}{selectedDetailItem.servingUnit || selectedDetailItem.unit}</span></div>
                                                     <div className={`text-lg font-black ${macro.color}`}>{macro.value || '--'}{macro.label === 'Calories' ? '' : 'g'}</div>
                                                 </div>
                                             ))}
@@ -1534,7 +1544,7 @@ export default function App() {
                         { id: 'unit', label: 'Unit', icon: <Scale size={12} /> },
                         { id: 'kg', label: 'Per kg', icon: <Scale size={12} /> },
                         { id: 'lb', label: 'Per lb', icon: <Scale size={12} /> },
-                        { id: 'protein', label: 'Pro', icon: <Zap size={12} /> },
+                        { id: 'protein', label: 'Protein', icon: <Zap size={12} /> },
                         { id: 'fats', label: 'Fat', icon: <Droplets size={12} /> },
                         { id: 'carbs', label: 'Carb', icon: <PieChart size={12} /> },
                         { id: 'calories', label: 'Cal', icon: <Flame size={12} /> },
@@ -1593,10 +1603,31 @@ export default function App() {
                                                 </div>
                                             </th>
                                         )}
-                                        {activeTab !== 'non-food' && visibleColumns.includes('pro') && (
-                                            <th className="px-4 py-4 cursor-pointer hover:text-blue-600 transition-colors text-orange-500 font-black" onClick={() => setTableSort(prev => ({ key: 'pro', direction: prev.key === 'pro' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
+                                        {activeTab !== 'non-food' && visibleColumns.includes('protein') && (
+                                            <th className="px-4 py-4 cursor-pointer hover:text-blue-600 transition-colors text-blue-600 font-black" onClick={() => setTableSort(prev => ({ key: 'protein', direction: prev.key === 'protein' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
                                                 <div className="flex items-center gap-1">
-                                                    Pro {tableSort.key === 'pro' && (tableSort.direction === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+                                                    Protein {tableSort.key === 'protein' && (tableSort.direction === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+                                                </div>
+                                            </th>
+                                        )}
+                                        {activeTab !== 'non-food' && visibleColumns.includes('carbs') && (
+                                            <th className="px-4 py-4 cursor-pointer hover:text-blue-600 transition-colors text-emerald-500 font-black" onClick={() => setTableSort(prev => ({ key: 'carbs', direction: prev.key === 'carbs' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
+                                                <div className="flex items-center gap-1">
+                                                    Carbs {tableSort.key === 'carbs' && (tableSort.direction === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+                                                </div>
+                                            </th>
+                                        )}
+                                        {activeTab !== 'non-food' && visibleColumns.includes('fats') && (
+                                            <th className="px-4 py-4 cursor-pointer hover:text-blue-600 transition-colors text-orange-500 font-black" onClick={() => setTableSort(prev => ({ key: 'fats', direction: prev.key === 'fats' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
+                                                <div className="flex items-center gap-1">
+                                                    Fat {tableSort.key === 'fats' && (tableSort.direction === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+                                                </div>
+                                            </th>
+                                        )}
+                                        {visibleColumns.includes('category') && (
+                                            <th className="px-4 py-4 cursor-pointer hover:text-blue-600 transition-colors opacity-50 font-black text-[9px]" onClick={() => setTableSort(prev => ({ key: 'category', direction: prev.key === 'category' && prev.direction === 'asc' ? 'desc' : 'asc' }))}>
+                                                <div className="flex items-center gap-1">
+                                                    Type {tableSort.key === 'category' && (tableSort.direction === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
                                                 </div>
                                             </th>
                                         )}
@@ -1609,7 +1640,7 @@ export default function App() {
                                                     </button>
                                                     <div className={`absolute top-full right-0 mt-2 w-48 ${theme.surface} border ${theme.border} rounded-xl shadow-2xl p-3 z-20 hidden group-hover:block transition-all`}>
                                                         <div className={`text-[9px] font-black uppercase tracking-widest ${theme.textMuted} mb-2 px-1 text-left`}>Visible Columns</div>
-                                                        {['store', 'total', 'unitPrice', 'pro'].map(col => (
+                                                        {['store', 'total', 'unitPrice', 'protein', 'carbs', 'fats', 'category'].map(col => (
                                                             <label key={col} className={`flex items-center gap-3 px-2 py-1.5 hover:${theme.inputBg} rounded-lg cursor-pointer transition-colors w-full`}>
                                                                 <input
                                                                     type="checkbox"
@@ -1617,7 +1648,7 @@ export default function App() {
                                                                     onChange={() => setVisibleColumns(prev => prev.includes(col) ? prev.filter(c => c !== col) : [...prev, col])}
                                                                     className="w-3 h-3 rounded text-blue-600 focus:ring-blue-500"
                                                                 />
-                                                                <span className={`text-[10px] font-bold uppercase ${theme.text} capitalize`}>{col === 'unitPrice' ? 'Unit Price' : col}</span>
+                                                                <span className={`text-[10px] font-bold uppercase ${theme.text} capitalize`}>{col === 'unitPrice' ? 'Unit Price' : (col === 'fats' ? 'Fat' : col)}</span>
                                                             </label>
                                                         ))}
                                                     </div>
@@ -1659,9 +1690,24 @@ export default function App() {
                                                         </span>
                                                     </td>
                                                 )}
-                                                {activeTab !== 'non-food' && visibleColumns.includes('pro') && (
-                                                    <td className="px-4 py-4 text-[11px] font-bold text-orange-500">
+                                                {activeTab !== 'non-food' && visibleColumns.includes('protein') && (
+                                                    <td className="px-4 py-4 text-[11px] font-bold text-blue-600">
                                                         {m.proteinYield || '--'}g/$1
+                                                    </td>
+                                                )}
+                                                {activeTab !== 'non-food' && visibleColumns.includes('carbs') && (
+                                                    <td className="px-4 py-4 text-[11px] font-bold text-emerald-500">
+                                                        {m.carbsYield || '--'}g/$1
+                                                    </td>
+                                                )}
+                                                {activeTab !== 'non-food' && visibleColumns.includes('fats') && (
+                                                    <td className="px-4 py-4 text-[11px] font-bold text-orange-500">
+                                                        {m.fatsYield || '--'}g/$1
+                                                    </td>
+                                                )}
+                                                {visibleColumns.includes('category') && (
+                                                    <td className="px-4 py-4 text-[9px] font-black uppercase opacity-40">
+                                                        {entry.category || 'Other'}
                                                     </td>
                                                 )}
                                                 <td className="px-4 py-4 text-right pr-6">

@@ -5,23 +5,72 @@ import {
     Filter, ShoppingCart, Tag, ChevronDown, Trash2, Camera, Image as ImageIcon,
     CheckCircle2, RotateCcw, Layers, MessageSquare, Send, UserCog, List, RefreshCw, Sparkles,
     ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Loader2, Maximize2, Settings, Moon, Sun, Folder,
-    CheckSquare, LayoutGrid, TableProperties, MoreVertical, Settings2, ChevronUp
+    CheckSquare, LayoutGrid, TableProperties, MoreVertical, Settings2, ChevronUp, LogIn, LogOut, Cloud
 } from 'lucide-react';
+
+// --- Real Firebase Integration ---
+import { initializeApp } from 'firebase/app';
+import { 
+    getAuth as getFirebaseAuth, 
+    signInWithPopup, 
+    GoogleAuthProvider, 
+    onAuthStateChanged as onFirebaseAuthStateChanged, 
+    signOut 
+} from 'firebase/auth';
+import { 
+    getFirestore as getFirebaseFirestore, 
+    collection as firebaseCollection, 
+    doc as firebaseDoc, 
+    setDoc as firebaseSetDoc, 
+    updateDoc as firebaseUpdateDoc, 
+    deleteDoc as firebaseDeleteDoc, 
+    addDoc as firebaseAddDoc, 
+    onSnapshot as onFirebaseSnapshot,
+    serverTimestamp as firestoreTimestamp,
+    query,
+    orderBy,
+    getDoc
+} from 'firebase/firestore';
+
+// YOU MUST REPLACE THESE WITH YOUR KEYS FROM FIREBASE CONSOLE
+const firebaseConfig = {
+  apiKey: "REPLACE_ME",
+  authDomain: "REPLACE_ME",
+  projectId: "REPLACE_ME",
+  storageBucket: "REPLACE_ME",
+  messagingSenderId: "REPLACE_ME",
+  appId: "REPLACE_ME"
+};
+
+// Initialize Firebase
+const firebaseApp = initializeApp(firebaseConfig);
+const firebaseAuth = getFirebaseAuth(firebaseApp);
+const firebaseDb = getFirebaseFirestore(firebaseApp);
+const googleProvider = new GoogleAuthProvider();
 
 // --- Local Storage Database Mock (Firebase API Shim) ---
 const serverTimestamp = () => ({ seconds: Math.floor(Date.now() / 1000) });
 
-const getAuth = () => ({});
-const signInAnonymously = async () => ({ user: { uid: 'local-user' } });
-const signInWithCustomToken = async () => ({ user: { uid: 'local-user' } });
-const onAuthStateChanged = (auth, cb) => {
-    cb({ uid: 'local-user' });
-    return () => { };
+let currentUser = { uid: 'local-user' };
+
+const onAuthStateChanged = (cb) => {
+    return onFirebaseAuthStateChanged(firebaseAuth, (user) => {
+        currentUser = user || { uid: 'local-user' };
+        cb(currentUser);
+    });
 };
 
-const getFirestore = () => ({});
-const collection = (db, ...paths) => paths.join('/');
-const doc = (db, ...paths) => paths.join('/');
+const signInWithGoogle = async () => {
+    try {
+        const result = await signInWithPopup(firebaseAuth, googleProvider);
+        return result.user;
+    } catch (error) {
+        console.error("Auth error", error);
+        throw error;
+    }
+};
+
+const signUserOut = () => signOut(firebaseAuth);
 
 const getStorage = () => JSON.parse(localStorage.getItem('nutripricr_db') || '[]');
 const saveStorage = (data) => {
@@ -29,49 +78,79 @@ const saveStorage = (data) => {
     window.dispatchEvent(new Event('db_updated'));
 };
 
+const getEntriesCollection = () => collection(firebaseDb, 'users', currentUser.uid, 'items');
+
 const onSnapshot = (col, callback) => {
-    const notify = () => callback({ docs: getStorage().map(e => ({ id: e.id, data: () => e })) });
-    notify();
-    window.addEventListener('db_updated', notify);
-    return () => window.removeEventListener('db_updated', notify);
+    if (!currentUser || currentUser.uid === 'local-user') {
+        const notify = () => callback({ docs: getStorage().map(e => ({ id: e.id, data: () => e })) });
+        notify();
+        window.addEventListener('db_updated', notify);
+        return () => window.removeEventListener('db_updated', notify);
+    }
+    
+    // Real Firestore snapshot
+    const q = query(getEntriesCollection(), orderBy('createdAt', 'desc'));
+    return onFirebaseSnapshot(q, (snapshot) => {
+        callback({ docs: snapshot.docs });
+    });
 };
 
 const addDoc = async (col, data) => {
-    const storage = getStorage();
-    const newId = crypto.randomUUID();
-    storage.push({ id: newId, ...data });
-    saveStorage(storage);
+    if (!currentUser || currentUser.uid === 'local-user') {
+        const storage = getStorage();
+        const newId = crypto.randomUUID();
+        storage.push({ id: newId, ...data });
+        saveStorage(storage);
+        return;
+    }
+    await firebaseAddDoc(getEntriesCollection(), {
+        ...data,
+        createdAt: firestoreTimestamp()
+    });
 };
 
 const updateDoc = async (id, data) => {
-    const storage = getStorage();
-    const index = storage.findIndex(e => e.id === id);
-    if (index > -1) {
-        storage[index] = { ...storage[index], ...data };
-        saveStorage(storage);
+    if (typeof id === 'string') {
+        if (!currentUser || currentUser.uid === 'local-user') {
+            const storage = getStorage();
+            const index = storage.findIndex(e => e.id === id);
+            if (index > -1) {
+                storage[index] = { ...storage[index], ...data };
+                saveStorage(storage);
+            }
+            return;
+        }
+        const docRef = firebaseDoc(firebaseDb, 'users', currentUser.uid, 'items', id);
+        await firebaseUpdateDoc(docRef, data);
+    } else {
+        // Handle legacy case where id might be a collection
+        console.warn("Legacy updateDoc call detected", id, data);
     }
 };
 
 const deleteDoc = async (id) => {
-    const storage = getStorage();
-    const newStorage = storage.filter(e => e.id !== id);
-    saveStorage(newStorage);
+    if (!currentUser || currentUser.uid === 'local-user') {
+        const storage = getStorage();
+        const newStorage = storage.filter(e => e.id !== id);
+        saveStorage(newStorage);
+        return;
+    }
+    const docRef = firebaseDoc(firebaseDb, 'users', currentUser.uid, 'items', id);
+    await firebaseDeleteDoc(docRef);
 };
 
 const setDoc = async (id, data) => {
-    const storage = getStorage();
-    const index = storage.findIndex(e => e.id === id);
-    if (index > -1) {
-        storage[index] = { id, ...data };
-    } else {
-        storage.push({ id, ...data });
+    if (!currentUser || currentUser.uid === 'local-user') {
+        const storage = getStorage();
+        const index = storage.findIndex(e => e.id === id);
+        if (index > -1) storage[index] = { id, ...data };
+        else storage.push({ id, ...data });
+        saveStorage(storage);
+        return;
     }
-    saveStorage(storage);
+    const docRef = firebaseDoc(firebaseDb, 'users', currentUser.uid, 'items', id);
+    await firebaseSetDoc(docRef, data);
 };
-
-const app = {};
-const auth = getAuth();
-const db = getFirestore();
 
 const PERSISTENT_APP_ID = import.meta.env.VITE_APP_ID || 'nutripricer_v1_stable';
 const UNIT_CONVERSIONS = { g: 1, kg: 1000, oz: 28.3495, lb: 453.592, ml: 1, l: 1000, ct: 1, scoop: 1, piece: 1, bar: 1 };
@@ -245,6 +324,76 @@ export default function App() {
     useEffect(() => {
         localStorage.setItem('nutripricer_columnWidths', JSON.stringify(columnWidths));
     }, [columnWidths]);
+
+    // --- Cloud Sync Logic ---
+    const migrateToCloud = async () => {
+        if (!user || user.uid === 'local-user') return;
+        const localData = getStorage();
+        if (localData.length === 0) return;
+        
+        setConfirmDialog({ 
+            isOpen: true, 
+            message: `Migrate ${localData.length} items to your cloud account?`, 
+            onConfirm: async () => {
+                setLoading(true);
+                setConfirmDialog({ isOpen: false });
+                try {
+                    for (const item of localData) {
+                        const { id, ...data } = item;
+                        await addDoc(null, data);
+                    }
+                    // Optional: Clear local storage or mark as migrated
+                    localStorage.setItem('nutripricer_migrated', 'true');
+                } catch (e) {
+                    console.error("Migration failed", e);
+                }
+                setLoading(false);
+            }
+        });
+    };
+
+    // Save/Load Settings to Firestore
+    useEffect(() => {
+        if (!user || user.uid === 'local-user') return;
+        
+        const syncSettings = async () => {
+            const configRef = firebaseDoc(firebaseDb, 'users', user.uid, 'config', 'main');
+            const snap = await getDoc(configRef);
+            if (snap.exists()) {
+                const data = snap.data();
+                if (data.geminiApiKey) setGeminiApiKey(data.geminiApiKey);
+                if (data.userPersona) setUserPersona(data.userPersona);
+                if (data.viewMode) setViewMode(data.viewMode);
+                if (data.showImages !== undefined) setShowImages(data.showImages);
+                if (data.columnWidths) setColumnWidths(data.columnWidths);
+            } else {
+                // Initialize cloud config with local data if empty
+                await firebaseSetDoc(configRef, {
+                    geminiApiKey,
+                    userPersona,
+                    viewMode,
+                    showImages,
+                    columnWidths,
+                    updatedAt: firestoreTimestamp()
+                });
+            }
+        };
+        syncSettings();
+    }, [user]);
+
+    // Update Cloud Settings when changed
+    useEffect(() => {
+        if (!user || user.uid === 'local-user') return;
+        const configRef = firebaseDoc(firebaseDb, 'users', user.uid, 'config', 'main');
+        firebaseSetDoc(configRef, {
+            geminiApiKey,
+            userPersona,
+            viewMode,
+            showImages,
+            columnWidths,
+            updatedAt: firestoreTimestamp()
+        }, { merge: true });
+    }, [geminiApiKey, userPersona, viewMode, showImages, columnWidths]);
 
     const handleMouseDown = useCallback((e, colKey) => {
         e.preventDefault();
@@ -923,33 +1072,18 @@ export default function App() {
 
     useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
 
-    // --- Original Code Initialization & Sync ---
+    // --- Firebase Initialization & Sync ---
     useEffect(() => {
-        const initAuth = async () => {
-            try {
-                if (import.meta.env.VITE_INITIAL_AUTH_TOKEN) {
-                    await signInWithCustomToken(auth, import.meta.env.VITE_INITIAL_AUTH_TOKEN);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (err) { console.error("Auth Error:", err); }
-        };
-        initAuth();
-        const unsubscribe = onAuthStateChanged(auth, (u) => {
+        const unsubscribe = onAuthStateChanged((u) => {
             setUser(u);
-            if (!u) setLoading(false);
+            setLoading(false);
         });
         return () => unsubscribe();
     }, []);
 
     useEffect(() => {
-        if (!user) return;
-        const pricesCol = collection(db, 'artifacts', PERSISTENT_APP_ID, 'users', user.uid, 'prices');
-        const unsubscribe = onSnapshot(pricesCol, (snapshot) => {
+        const unsubscribe = onSnapshot(null, (snapshot) => {
             setEntries(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            setLoading(false);
-        }, (err) => {
-            console.error("Firestore Error:", err);
             setLoading(false);
         });
         return () => unsubscribe();
@@ -1983,7 +2117,30 @@ export default function App() {
                                 />
                             </div>
 
-                            <div className="space-y-4">
+                            <div className="space-y-3 pb-4">
+                            {!user || user.uid === 'local-user' ? (
+                                <button onClick={async () => { try { await signInWithGoogle(); setShowSettingsMenu(false); } catch(e) {} }} className="w-full bg-white border border-slate-200 p-4 rounded-2xl font-black uppercase text-[11px] tracking-widest flex items-center justify-center gap-3 transition-all hover:bg-slate-50 text-slate-900 shadow-sm">
+                                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-4 h-4" />
+                                    Sign in with Google
+                                </button>
+                            ) : (
+                                <div className={`p-4 rounded-2xl border ${theme.border} ${theme.inputBg} space-y-3`}>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-black uppercase">{user.displayName?.[0] || user.email?.[0] || 'U'}</div>
+                                        <div>
+                                            <div className={`text-[11px] font-black uppercase ${theme.text}`}>{user.displayName || 'Cloud User'}</div>
+                                            <div className={`text-[9px] font-bold opacity-60 ${theme.text}`}>{user.email}</div>
+                                        </div>
+                                    </div>
+                                    <div className="pt-2 flex gap-2">
+                                        <button onClick={() => { signUserOut(); setShowSettingsMenu(false); }} className={`flex-1 ${theme.btnMuted} border py-2.5 rounded-xl font-black uppercase text-[9px] tracking-widest flex items-center justify-center gap-2`}><LogOut size={12} /> Sign Out</button>
+                                        <button onClick={() => { migrateToCloud(); setShowSettingsMenu(false); }} className="flex-1 bg-blue-600 text-white py-2.5 rounded-xl font-black uppercase text-[9px] tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20"><Cloud size={12} /> Sync Local</button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="space-y-4">
                                 <div className="flex items-center justify-between ml-4">
                                     <label className={`text-[10px] font-black uppercase ${theme.textMuted} block`}>Product Title</label>
                                     <label className="flex items-center gap-2 cursor-pointer">
